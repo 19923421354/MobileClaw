@@ -18,8 +18,11 @@ import com.mobileclaw.app.service.ClawAgentService
 import com.mobileclaw.app.shizuku.ShizukuManager
 import com.mobileclaw.app.util.PermissionManager
 import com.mobileclaw.app.util.VoiceInputHelper
+import com.mobileclaw.app.util.UpdateChecker
+import com.mobileclaw.app.util.UpdateInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -92,6 +95,12 @@ class MainActivity : AppCompatActivity() {
                 updateServiceStatus()
             }
         }
+
+        // 启动后自动检查更新（延迟2秒，让界面先加载完成）
+        lifecycleScope.launch {
+            delay(2000)
+            checkForUpdatesAuto()
+        }
     }
 
     override fun onResume() {
@@ -99,6 +108,8 @@ class MainActivity : AppCompatActivity() {
         // 强制重新检测 Shizuku/STELLAR 连接状态
         // 解决：用户从 STELLAR 返回后，Binder 可能已推送但未检测到的问题
         ShizukuManager.forceRebind(this)
+        // 刷新权限缓存（用户可能刚从设置页返回，权限状态已变）
+        PermissionManager.refreshPermissions()
         updateServiceStatus()
     }
 
@@ -122,7 +133,7 @@ class MainActivity : AppCompatActivity() {
                     "只需开启【无障碍服务】即可使用核心功能（点击/滑动/输入/截屏等）。\n\n" +
                     "⚡ 已支持一键配置！点击右下角「⚡」按钮，有 Shizuku/STELLAR 即可一键开启无障碍，无需手动设置。\n\n" +
                     "默认使用智谱 GLM-4.7-Flash（免费模型），在设置中可切换其他模型。\n\n" +
-                    "v2.0.2 升级 — 一键配置 + 执行优化：\n" +
+                    "v2.0.3 更新 — 检查更新 + 赞助开发者 + 权限优化：\n" +
                     "🔥 全新密钥：彻底解决覆盖安装冲突，后续版本均可覆盖安装\n" +
                     "🔥 AI Agent 引擎：ReAct 推理循环，自动调用工具完成任务\n" +
                     "🔥 15+ 内置工具：Shell命令/Python执行/文件操作/应用管理/屏幕操控\n" +
@@ -237,6 +248,16 @@ class MainActivity : AppCompatActivity() {
         // 语音输入按钮
         binding.btnVoice.setOnClickListener {
             startVoiceInput()
+        }
+
+        // 检查更新按钮
+        binding.btnUpdate.setOnClickListener {
+            checkForUpdatesManual()
+        }
+
+        // 赞助开发者按钮
+        binding.btnSponsor.setOnClickListener {
+            showSponsorDialog()
         }
     }
 
@@ -517,46 +538,50 @@ class MainActivity : AppCompatActivity() {
 
     /**
      * 显示权限管理对话框。
-     * 列出所有权限状态，点击可跳转到对应设置页面。
+     *
+     * 提供两种模式（分开展示，避免混淆）：
+     * 1. 【一键快捷配置】— 自动尝试通过 Shizuku 一键开启无障碍，无需手动操作
+     * 2. 【逐个设置】— 列出所有权限，用户选择后跳转到对应系统设置页手动开关
+     *
+     * 两种模式各自独立，用户可自由选择。
      */
     private fun showPermissionDialog() {
         val permissions = PermissionManager.getAllPermissions(this)
 
+        val grantedCount = permissions.count { it.granted }
+        val totalCount = permissions.size
+        val missingRequired = permissions.any { it.required && !it.granted }
+
         val sb = StringBuilder()
-        sb.appendLine("权限状态总览：")
+        sb.appendLine("权限状态：$grantedCount/$totalCount")
         sb.appendLine()
 
         permissions.forEachIndexed { index, perm ->
-            val icon = if (perm.granted) "✅" else if (perm.required) "❌" else "⚠️"
-            sb.appendLine("${index + 1}. $icon ${perm.name}${if (perm.required) " (必需)" else ""}")
-            sb.appendLine("   ${perm.description}")
-            if (!perm.granted) {
-                sb.appendLine("   >>> 点击「去设置」开启此权限")
-            }
-            sb.appendLine()
+            val icon = if (perm.granted) "✓" else if (perm.required) "✗" else "-"
+            sb.appendLine("${icon} ${perm.name}${if (perm.required) " (必需)" else ""}")
         }
 
-        val missingRequired = permissions.any { it.required && !it.granted }
-        val missingOptional = permissions.any { !it.required && !it.granted }
-
-        sb.appendLine("---")
+        sb.appendLine()
         if (missingRequired) {
-            sb.appendLine("⚠️ 必需权限未开启，核心功能无法使用！")
-        } else if (missingOptional) {
-            sb.appendLine("可选权限未全部开启，部分高级功能可能受限。")
-            sb.appendLine("当前无需 STELLAR 也可使用基本功能。")
+            sb.appendLine("必需权限未开启，核心功能无法使用。")
         } else {
-            sb.appendLine("✅ 所有权限已就绪！")
+            sb.appendLine("所有必需权限已就绪。")
         }
+
+        sb.appendLine()
+        sb.appendLine("━━━ 选择配置方式 ━━━")
+        sb.appendLine()
+        sb.appendLine("【一键快捷配置】")
+        sb.appendLine("有 Shizuku/STELLAR 时自动一键开启无障碍，全程无需跳转设置页。")
+        sb.appendLine()
+        sb.appendLine("【逐个设置】")
+        sb.appendLine("手动选择要设置的权限，跳转到系统设置页自行开关。")
 
         AlertDialog.Builder(this)
             .setTitle("权限管理")
             .setMessage(sb.toString())
-            .setPositiveButton("⚡ 一键快捷配置") { _, _ ->
+            .setPositiveButton("一键快捷配置") { _, _ ->
                 PermissionManager.quickSetup(this)
-            }
-            .setNeutralButton("完整引导") { _, _ ->
-                PermissionManager.requestAllPermissions(this)
             }
             .setNegativeButton("逐个设置") { _, _ ->
                 showIndividualPermissionDialog(permissions)
@@ -566,18 +591,38 @@ class MainActivity : AppCompatActivity() {
 
     /**
      * 逐个权限设置对话框。
+     *
+     * 列出所有权限，用户点击某个权限后跳转到对应的系统设置页。
+     * 已授权的权限标注 ✓，未授权的标注 ✗（必需）或 -（可选）。
+     * 每次只处理一个权限，用户从设置页返回后可继续选择其他权限。
      */
     private fun showIndividualPermissionDialog(permissions: List<PermissionManager.PermissionStatus>) {
+        // 构建带状态的列表项
         val items = permissions.map { perm ->
-            val icon = if (perm.granted) "✅" else if (perm.required) "❌" else "⚠️"
-            "$icon ${perm.name}"
+            val icon = if (perm.granted) "✓" else if (perm.required) "✗" else "-"
+            val required = if (perm.required) " [必需]" else ""
+            "$icon ${perm.name}$required"
         }.toTypedArray()
 
         AlertDialog.Builder(this)
             .setTitle("选择要设置的权限")
             .setItems(items) { _, which ->
                 val perm = permissions[which]
-                PermissionManager.requestPermission(this, perm.type)
+                // 已授权则提示
+                if (perm.granted) {
+                    AlertDialog.Builder(this)
+                        .setTitle(perm.name)
+                        .setMessage("${perm.name} 已授权，无需重复设置。\n\n${perm.description}")
+                        .setPositiveButton("知道了", null)
+                        .setNeutralButton("重新设置") { _, _ ->
+                            PermissionManager.requestPermission(this, perm.type)
+                        }
+                        .show()
+                } else {
+                    // 未授权 → 跳转到设置页
+                    PermissionManager.requestPermission(this, perm.type)
+                    showToast("正在打开「${perm.name}」设置…")
+                }
             }
             .setNegativeButton("关闭", null)
             .show()
@@ -1158,5 +1203,224 @@ class MainActivity : AppCompatActivity() {
 
     private fun showToast(msg: String) {
         android.widget.Toast.makeText(this, msg, android.widget.Toast.LENGTH_SHORT).show()
+    }
+
+    // =========================================================================
+    //  更新检查
+    // =========================================================================
+
+    /** 当前版本号，从 BuildConfig 读取 */
+    private val appVersion: String by lazy {
+        BuildConfig.VERSION_NAME
+    }
+
+    /** 是否已缓存更新信息（避免重复弹窗） */
+    private var updateInfoCached: UpdateInfo? = null
+
+    /**
+     * 自动检查更新（静默模式）。
+     * 仅在检测到新版本时弹窗提示，无更新时不打扰用户。
+     */
+    private fun checkForUpdatesAuto() {
+        lifecycleScope.launch {
+            val info = UpdateChecker.checkForUpdate(appVersion)
+            if (info != null) {
+                updateInfoCached = info
+                // 仅在首次发现新版本时弹窗
+                val prefs = getSharedPreferences("mobileclaw", MODE_PRIVATE)
+                val lastSkipped = prefs.getString("skipped_version", "")
+                if (lastSkipped != info.latestVersion) {
+                    showUpdateDialog(info, autoDetected = true)
+                }
+            }
+        }
+    }
+
+    /**
+     * 手动检查更新。
+     * 显示加载状态，无论有无更新都给出明确反馈。
+     */
+    private fun checkForUpdatesManual() {
+        val dialog = android.app.ProgressDialog.show(this, "检查更新", "正在检查新版本…", true, false)
+        lifecycleScope.launch {
+            val info = UpdateChecker.checkForUpdate(appVersion)
+            dialog.dismiss()
+            if (info != null) {
+                updateInfoCached = info
+                showUpdateDialog(info, autoDetected = false)
+            } else {
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("检查更新")
+                    .setMessage("当前已是最新版本（v$appVersion），无需更新。")
+                    .setPositiveButton("好的", null)
+                    .show()
+            }
+        }
+    }
+
+    /**
+     * 显示更新对话框。
+     *
+     * @param info 更新信息
+     * @param autoDetected 是否为自动检测触发（影响按钮文案）
+     */
+    private fun showUpdateDialog(info: UpdateInfo, autoDetected: Boolean) {
+        val changelog = if (info.changelog.isBlank()) "暂无更新日志" else info.changelog
+        val sizeInfo = if (info.apkSize > 0) "（${info.formattedSize()}）" else ""
+
+        AlertDialog.Builder(this)
+            .setTitle("发现新版本 v${info.latestVersion}")
+            .setMessage(
+                "当前版本：v$appVersion\n" +
+                "最新版本：v${info.latestVersion}\n" +
+                "发布时间：${info.publishedAt.take(10)}\n\n" +
+                "更新日志：\n$changelog"
+            )
+            .setPositiveButton("下载更新 $sizeInfo") { _, _ ->
+                downloadAndInstallUpdate(info)
+            }
+            .setNeutralButton("以后再说") { _, _ ->
+                // 自动检测时提示可跳过此版本
+                if (autoDetected) {
+                    showSkipVersionPrompt(info)
+                }
+            }
+            .setNegativeButton("忽略此版本") { _, _ ->
+                val prefs = getSharedPreferences("mobileclaw", MODE_PRIVATE)
+                prefs.edit().putString("skipped_version", info.latestVersion).apply()
+                showToast("已忽略 v${info.latestVersion}")
+            }
+            .show()
+    }
+
+    /**
+     * 自动检测更新时，提供「跳过此版本」选项。
+     */
+    private fun showSkipVersionPrompt(info: UpdateInfo) {
+        AlertDialog.Builder(this)
+            .setTitle("跳过此版本？")
+            .setMessage("v${info.latestVersion} 的更新提醒将被忽略，下次检查更新时不会再提示。\n\n" +
+                    "你可以随时点击工具栏的「检查更新」按钮手动检查。")
+            .setPositiveButton("跳过此版本") { _, _ ->
+                val prefs = getSharedPreferences("mobileclaw", MODE_PRIVATE)
+                prefs.edit().putString("skipped_version", info.latestVersion).apply()
+                showToast("已跳过 v${info.latestVersion}")
+            }
+            .setNegativeButton("保留提醒", null)
+            .show()
+    }
+
+    /**
+     * 下载并安装更新。
+     * 先下载到缓存目录，然后调用系统安装器。
+     */
+    private fun downloadAndInstallUpdate(info: UpdateInfo) {
+        val downloadDialog = android.app.ProgressDialog.show(this, "下载更新", "正在下载 v${info.latestVersion}…", true, false)
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            val apkFile = File(cacheDir, info.apkName)
+            // 如果已下载过且文件存在，直接安装
+            if (apkFile.exists() && apkFile.length() > 1_000_000) {
+                val cachedSize = info.apkSize
+                if (cachedSize == 0L || apkFile.length() == cachedSize) {
+                    runOnUiThread { downloadDialog.dismiss() }
+                    UpdateChecker.installApk(this@MainActivity, apkFile)
+                    return@launch
+                }
+            }
+
+            val success = UpdateChecker.downloadApk(info.downloadUrl, apkFile)
+            runOnUiThread { downloadDialog.dismiss() }
+
+            if (success) {
+                runOnUiThread {
+                    showToast("下载完成，正在启动安装…")
+                    UpdateChecker.installApk(this@MainActivity, apkFile)
+                }
+            } else {
+                runOnUiThread {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("下载失败")
+                        .setMessage("下载更新文件失败，请检查网络连接后重试。\n\n" +
+                                "你也可以通过浏览器手动下载：\n${info.releaseUrl}")
+                        .setPositiveButton("打开浏览器") { _, _ ->
+                            val intent = android.content.Intent(
+                                android.content.Intent.ACTION_VIEW,
+                                android.net.Uri.parse(info.releaseUrl)
+                            )
+                            startActivity(intent)
+                        }
+                        .setNegativeButton("取消", null)
+                        .show()
+                }
+            }
+        }
+    }
+
+    // =========================================================================
+    //  赞助开发者
+    // =========================================================================
+
+    /**
+     * 显示赞助对话框。
+     * 展示微信支付二维码，支持开发者。
+     */
+    private fun showSponsorDialog() {
+        val imageView = android.widget.ImageView(this)
+        imageView.setPadding(40, 20, 40, 20)
+        imageView.scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+        imageView.adjustViewBounds = true
+
+        // 尝试加载微信支付二维码（从 assets 或 res 目录）
+        // 用户后续可放置图片到 res/drawable/ic_wechat_qr.png 或 assets/wechat_qr.png
+        var qrLoaded = false
+        try {
+            // 优先从 assets 加载
+            val inputStream = assets.open("wechat_qr.png")
+            val bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
+            inputStream.close()
+            if (bitmap != null) {
+                imageView.setImageBitmap(bitmap)
+                qrLoaded = true
+            }
+        } catch (_: Exception) {}
+
+        if (!qrLoaded) {
+            try {
+                // 回退从 drawable 加载
+                val resId = resources.getIdentifier("ic_wechat_qr", "drawable", packageName)
+                if (resId != 0) {
+                    imageView.setImageResource(resId)
+                    qrLoaded = true
+                }
+            } catch (_: Exception) {}
+        }
+
+        val message = buildString {
+            appendLine("如果灵爪对你有所帮助，欢迎赞助开发者一杯咖啡 ☕")
+            appendLine()
+            appendLine("你的支持是持续改进的动力！")
+            if (!qrLoaded) {
+                appendLine()
+                appendLine("💡 微信支付二维码加载中，请稍后…")
+                appendLine("（开发者将在后续版本中更新二维码）")
+            }
+        }
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("赞助开发者")
+            .setMessage(message)
+            .setPositiveButton("好的", null)
+            .create()
+
+        if (qrLoaded) {
+            // 计算合适的高度（按屏幕宽度的 70% 作为图片宽度，保持比例）
+            val displayMetrics = resources.displayMetrics
+            val maxWidth = (displayMetrics.widthPixels * 0.7).toInt()
+            imageView.layoutParams = android.view.ViewGroup.LayoutParams(maxWidth, (maxWidth * 1.05).toInt())
+            dialog.setView(imageView, 40, 10, 40, 10)
+        }
+
+        dialog.show()
     }
 }

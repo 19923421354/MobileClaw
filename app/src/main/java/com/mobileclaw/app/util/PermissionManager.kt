@@ -107,10 +107,41 @@ object PermissionManager {
         CALL_LOG
     }
 
+    /** 权限缓存，避免频繁调用 getAllPermissions 导致卡顿。缓存有效期 3 秒。 */
+    private var permissionsCache: List<PermissionStatus>? = null
+    private var permissionsCacheTime: Long = 0
+    private const val PERMISSIONS_CACHE_TTL_MS = 3000L
+
     /**
      * 获取所有需要检查的权限状态列表。
+     *
+     * 带缓存优化：3 秒内重复调用直接返回缓存结果，避免频繁检测系统设置导致卡顿。
+     * 若需强制刷新，请调用 [refreshPermissions]。
+     *
+     * @param context 上下文
+     * @param forceRefresh 是否强制刷新缓存
      */
-    fun getAllPermissions(context: Context): List<PermissionStatus> {
+    fun getAllPermissions(context: Context, forceRefresh: Boolean = false): List<PermissionStatus> {
+        val now = System.currentTimeMillis()
+        if (!forceRefresh && permissionsCache != null && (now - permissionsCacheTime) < PERMISSIONS_CACHE_TTL_MS) {
+            return permissionsCache!!
+        }
+        val result = buildPermissionList(context)
+        permissionsCache = result
+        permissionsCacheTime = now
+        return result
+    }
+
+    /**
+     * 强制刷新权限缓存，下次调用 [getAllPermissions] 时重新检测。
+     */
+    fun refreshPermissions() {
+        permissionsCache = null
+        permissionsCacheTime = 0
+    }
+
+    /** 构建权限列表（内部方法，不经过缓存）。 */
+    private fun buildPermissionList(context: Context): List<PermissionStatus> {
         return listOf(
             PermissionStatus(
                 name = "无障碍服务",
@@ -1041,7 +1072,26 @@ object PermissionManager {
     }
 
     /**
+     * 打开系统应用权限设置页（运行时权限）。
+     *
+     * 跳转到系统设置中本应用的权限管理页面，让用户手动开关各项运行时权限。
+     * 适用于相机、定位、麦克风等无法通过 Intent 直达单项设置的权限。
+     */
+    private fun openAppPermissionSettings(context: Context) {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.parse("package:${context.packageName}")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        runCatching { context.startActivity(intent) }
+    }
+
+    /**
      * 根据 [PermissionType] 跳转到对应的权限设置页。
+     *
+     * 行为说明：
+     * - 特殊权限（无障碍、悬浮窗、电池优化等）→ 跳转对应系统设置页
+     * - 运行时权限（相机、定位、麦克风等）→ 跳转本应用的应用详情页，用户可手动开关
+     * - 调试权限（Shizuku/STELLAR）→ 根据安装状态引导操作
      */
     fun requestPermission(context: Context, type: PermissionType) {
         when (type) {
@@ -1051,60 +1101,27 @@ object PermissionManager {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     requestStoragePermission(context)
                 } else {
-                    if (context is Activity) {
-                        requestBasicPermissions(context)
-                    }
+                    openAppPermissionSettings(context)
                 }
             }
             PermissionType.NOTIFICATION -> {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && context is Activity) {
-                    requestBasicPermissions(context)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    openAppPermissionSettings(context)
                 }
             }
             PermissionType.BATTERY_OPTIMIZATION -> requestBatteryOptimization(context)
             PermissionType.USAGE_STATS -> requestUsageStatsPermission(context)
             PermissionType.SHIZUKU -> requestShizukuPermission(context)
             PermissionType.AUTO_START -> requestAutoStartPermission(context)
-            PermissionType.PHONE_STATE -> {
-                if (context is Activity) {
-                    requestBasicPermissions(context)
-                }
-            }
-            PermissionType.CAMERA -> {
-                if (context is Activity) {
-                    requestBasicPermissions(context)
-                }
-            }
-            PermissionType.LOCATION -> {
-                if (context is Activity) {
-                    requestBasicPermissions(context)
-                }
-            }
-            PermissionType.MICROPHONE -> {
-                if (context is Activity) {
-                    requestBasicPermissions(context)
-                }
-            }
-            PermissionType.CONTACTS -> {
-                if (context is Activity) {
-                    requestBasicPermissions(context)
-                }
-            }
-            PermissionType.CALENDAR -> {
-                if (context is Activity) {
-                    requestBasicPermissions(context)
-                }
-            }
-            PermissionType.SMS -> {
-                if (context is Activity) {
-                    requestBasicPermissions(context)
-                }
-            }
-            PermissionType.CALL_LOG -> {
-                if (context is Activity) {
-                    requestBasicPermissions(context)
-                }
-            }
+            // 所有运行时权限 → 跳转到应用详情设置页，让用户手动开关
+            PermissionType.PHONE_STATE,
+            PermissionType.CAMERA,
+            PermissionType.LOCATION,
+            PermissionType.MICROPHONE,
+            PermissionType.CONTACTS,
+            PermissionType.CALENDAR,
+            PermissionType.SMS,
+            PermissionType.CALL_LOG -> openAppPermissionSettings(context)
         }
     }
 
