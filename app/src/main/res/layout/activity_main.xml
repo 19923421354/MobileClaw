@@ -1,0 +1,339 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg_main">
+
+    <!-- ============ 顶部状态栏（Material 卡片样式） ============ -->
+    <com.google.android.material.card.MaterialCardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:cardCornerRadius="0dp"
+        app:cardElevation="2dp"
+        app:cardBackgroundColor="@color/surface_white"
+        app:strokeWidth="0dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="10dp">
+
+            <!-- 第一行：品牌 + AI 模型名 + 设置入口 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="8dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="灵爪"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/brand_primary" />
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="16dp"
+                    android:layout_marginHorizontal="8dp"
+                    android:background="@color/divider_light" />
+
+                <TextView
+                    android:id="@+id/txtAiStatus"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="AI: 未配置"
+                    android:textSize="12sp"
+                    android:textColor="@color/text_secondary"
+                    android:singleLine="true"
+                    android:ellipsize="end" />
+
+                <ImageButton
+                    android:id="@+id/btnSettings"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:src="@drawable/ic_action_settings"
+                    android:tint="@color/brand_primary"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="设置" />
+            </LinearLayout>
+
+            <!-- 第二行：权限状态（图标 + 数字） -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <LinearLayout
+                    android:id="@+id/layoutShizukuStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:paddingHorizontal="6dp"
+                    android:paddingVertical="4dp">
+
+                    <ImageView
+                        android:layout_width="14dp"
+                        android:layout_height="14dp"
+                        android:src="@drawable/ic_action_verified"
+                        android:tint="@color/text_secondary" />
+
+                    <TextView
+                        android:id="@+id/txtShizukuStatus"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:text="权限 0/8"
+                        android:textSize="11sp"
+                        android:textColor="@color/text_secondary" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/layoutAccessibilityStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginStart="10dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:paddingHorizontal="6dp"
+                    android:paddingVertical="4dp">
+
+                    <ImageView
+                        android:layout_width="14dp"
+                        android:layout_height="14dp"
+                        android:src="@drawable/ic_action_verified"
+                        android:tint="@color/text_secondary" />
+
+                    <TextView
+                        android:id="@+id/txtAccessibilityStatus"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:text="无障碍: 未开启"
+                        android:textSize="11sp"
+                        android:textColor="@color/text_secondary" />
+                </LinearLayout>
+
+                <Space
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+            </LinearLayout>
+
+            <!-- 第三行：模式开关 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="8dp">
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchTokenSaving"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="智能模式"
+                    android:textSize="12sp"
+                    android:textColor="@color/text_secondary"
+                    app:switchMinWidth="40dp"
+                    app:thumbTint="@color/brand_primary"
+                    app:trackTint="@color/divider_light" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchLocalModel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="本地模式"
+                    android:textSize="12sp"
+                    android:textColor="@color/text_secondary"
+                    app:switchMinWidth="40dp"
+                    app:thumbTint="@color/brand_accent"
+                    app:trackTint="@color/divider_light" />
+
+                <Space
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchThinking"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="思考模式"
+                    android:textSize="12sp"
+                    android:textColor="@color/text_secondary"
+                    app:switchMinWidth="40dp"
+                    app:thumbTint="@color/brand_primary"
+                    app:trackTint="@color/divider_light" />
+            </LinearLayout>
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- ============ 聊天消息列表 ============ -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerChat"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:paddingHorizontal="6dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="8dp"
+        android:scrollbars="vertical" />
+
+    <!-- ============ 快捷操作栏（图标按钮） ============ -->
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="none"
+        android:background="@color/surface_white"
+        android:elevation="2dp">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="6dp">
+
+            <ImageButton
+                android:id="@+id/btnScreenshot"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_marginHorizontal="2dp"
+                android:src="@drawable/ic_action_camera"
+                android:tint="@color/brand_primary"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="截屏" />
+
+            <ImageButton
+                android:id="@+id/btnBack"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_marginHorizontal="2dp"
+                android:src="@drawable/ic_action_back"
+                android:tint="@color/brand_primary"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="返回" />
+
+            <ImageButton
+                android:id="@+id/btnHome"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_marginHorizontal="2dp"
+                android:src="@drawable/ic_action_home"
+                android:tint="@color/brand_primary"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Home" />
+
+            <ImageButton
+                android:id="@+id/btnMemory"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_marginHorizontal="2dp"
+                android:src="@drawable/ic_action_memory"
+                android:tint="@color/brand_primary"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="内存" />
+
+            <ImageButton
+                android:id="@+id/btnClean"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_marginHorizontal="2dp"
+                android:src="@drawable/ic_action_clean"
+                android:tint="@color/brand_secondary"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="清理" />
+
+            <ImageButton
+                android:id="@+id/btnLocalModel"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_marginHorizontal="2dp"
+                android:src="@drawable/ic_action_chip"
+                android:tint="@color/brand_primary"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="本地模型" />
+
+            <ImageButton
+                android:id="@+id/btnQuickSettings"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_marginHorizontal="2dp"
+                android:src="@drawable/ic_action_settings"
+                android:tint="@color/text_secondary"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="设置" />
+        </LinearLayout>
+    </HorizontalScrollView>
+
+    <!-- ============ 底部输入栏 ============ -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:background="@color/surface_white"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="10dp"
+        android:paddingVertical="8dp"
+        android:elevation="6dp">
+
+        <EditText
+            android:id="@+id/editInput"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:minHeight="48dp"
+            android:hint="输入指令，如：打开微信"
+            android:maxLines="4"
+            android:inputType="textMultiLine|textCapSentences"
+            android:background="@drawable/bg_edittext"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="12dp"
+            android:textSize="14sp"
+            android:textColor="#202020"
+            android:textColorHint="#9AA5B1" />
+
+        <ImageButton
+            android:id="@+id/btnVoice"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginHorizontal="6dp"
+            android:src="@drawable/ic_action_voice"
+            android:tint="@color/brand_primary"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="语音输入" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSend"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="0dp"
+            android:text="发送"
+            android:textSize="14sp"
+            android:textColor="@android:color/white"
+            app:icon="@drawable/ic_action_send"
+            app:iconTint="@android:color/white"
+            app:iconGravity="textStart"
+            app:iconPadding="6dp"
+            app:backgroundTint="@color/brand_primary"
+            app:cornerRadius="22dp" />
+    </LinearLayout>
+
+</LinearLayout>

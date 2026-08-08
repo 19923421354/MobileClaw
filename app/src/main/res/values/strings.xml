@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">灵爪</string>
+    <string name="accessibility_service_label">灵爪 屏幕控制服务</string>
+    <string name="accessibility_service_description">灵爪 AI 智能体需要此服务来操控屏幕，包括点击、滑动、输入文本、截屏等功能。仅在用户下达指令时执行操作。</string>
+</resources>

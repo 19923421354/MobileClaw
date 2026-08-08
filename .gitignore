@@ -1,0 +1,30 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# App build output
+/app/build
+/app/release
+
+# Signing keys (sensitive)
+*.keystore
+*.jks
+
+# Signing properties (if using keystore.properties)
+keystore.properties
+
+# Generated files
+/app/src/main/java/com/mobileclaw/app/databinding
+/app/src/main/java/com/mobileclaw/app/BuildConfig.java
+
+# IDE
+*.swp
+*.swo
+*~

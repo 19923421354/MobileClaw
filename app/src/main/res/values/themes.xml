@@ -1,0 +1,32 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme (Material Design 风格，品牌色方案) -->
+    <style name="Theme.MobileClaw" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="colorPrimary">#FF1A73E8</item>
+        <item name="colorPrimaryVariant">#FF1557B0</item>
+        <item name="colorOnPrimary">#FFFFFFFF</item>
+        <item name="colorSecondary">#FF00BCD4</item>
+        <item name="colorSecondaryVariant">#FF0097A7</item>
+        <item name="colorOnSecondary">#FFFFFFFF</item>
+        <item name="android:colorBackground">#FFFAFAFA</item>
+        <item name="colorSurface">#FFFFFFFF</item>
+        <item name="colorOnSurface">#FF202020</item>
+        <item name="android:statusBarColor" tools:targetApi="l">#FF1557B0</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">true</item>
+    </style>
+
+    <!-- 品牌色资源 -->
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="brand_primary">#FF1A73E8</color>
+    <color name="brand_primary_dark">#FF1557B0</color>
+    <color name="brand_secondary">#FF00BCD4</color>
+    <color name="brand_accent">#FFFF9800</color>
+    <color name="bg_main">#FFFAFAFA</color>
+    <color name="surface_white">#FFFFFFFF</color>
+    <color name="ai_msg_bg">#FFFFFFFF</color>
+    <color name="user_msg_bg">#FF1A73E8</color>
+    <color name="icon_deep_blue">#FF0A1929</color>
+    <color name="text_secondary">#FF888888</color>
+    <color name="text_primary">#FF202020</color>
+    <color name="divider_light">#FFE3E8EF</color>
+</resources>
