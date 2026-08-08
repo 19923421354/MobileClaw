@@ -1363,64 +1363,161 @@ class MainActivity : AppCompatActivity() {
 
     /**
      * 显示赞助对话框。
-     * 展示微信支付二维码，支持开发者。
+     *
+     * 支持微信支付和支付宝两种方式，用户可通过顶部切换按钮选择。
+     * 二维码图片从 assets 目录加载（wechat_qr.png / alipay_qr.jpg）。
      */
     private fun showSponsorDialog() {
+        val displayMetrics = resources.displayMetrics
+        val qrWidth = (displayMetrics.widthPixels * 0.65).toInt()
+        val qrHeight = (qrWidth * 1.05).toInt()
+
+        // 预加载两张二维码 bitmap
+        val wechatBitmap = try {
+            val `is` = assets.open("wechat_qr.png")
+            val bm = android.graphics.BitmapFactory.decodeStream(`is`)
+            `is`.close()
+            bm
+        } catch (_: Exception) { null }
+
+        val alipayBitmap = try {
+            val `is` = assets.open("alipay_qr.jpg")
+            val bm = android.graphics.BitmapFactory.decodeStream(`is`)
+            `is`.close()
+            bm
+        } catch (_: Exception) { null }
+
+        val hasWechat = wechatBitmap != null
+        val hasAlipay = alipayBitmap != null
+
+        // 如果两张二维码都没有，显示纯文字提示
+        if (!hasWechat && !hasAlipay) {
+            AlertDialog.Builder(this)
+                .setTitle("赞助开发者")
+                .setMessage("如果灵爪对你有所帮助，欢迎赞助开发者一杯咖啡！\n\n你的支持是持续改进的动力！\n\n（二维码即将在后续版本中更新）")
+                .setPositiveButton("好的", null)
+                .show()
+            return
+        }
+
+        // 构建自定义视图
+        val rootLayout = android.widget.LinearLayout(this)
+        rootLayout.orientation = android.widget.LinearLayout.VERTICAL
+        rootLayout.setPadding(40, 20, 40, 20)
+
+        // 顶部文字
+        val titleText = android.widget.TextView(this)
+        titleText.text = "如果灵爪对你有所帮助，欢迎赞助开发者一杯咖啡！\n你的支持是持续改进的动力！"
+        titleText.textSize = 14f
+        titleText.gravity = android.view.Gravity.CENTER
+        titleText.setPadding(0, 0, 0, 16)
+        rootLayout.addView(titleText)
+
+        // 切换按钮行
+        val tabLayout = android.widget.LinearLayout(this)
+        tabLayout.orientation = android.widget.LinearLayout.HORIZONTAL
+        tabLayout.gravity = android.view.Gravity.CENTER
+        tabLayout.setPadding(0, 0, 0, 12)
+
+        val btnWechat = android.widget.Button(this)
+        btnWechat.text = "微信支付"
+        btnWechat.tag = "wechat"
+        btnWechat.setTextSize(13f)
+        btnWechat.setPadding(24, 8, 24, 8)
+        val tabParams = android.widget.LinearLayout.LayoutParams(
+            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        tabParams.setMargins(0, 0, 8, 0)
+        btnWechat.layoutParams = tabParams
+
+        val btnAlipay = android.widget.Button(this)
+        btnAlipay.text = "支付宝"
+        btnAlipay.tag = "alipay"
+        btnAlipay.setTextSize(13f)
+        btnAlipay.setPadding(24, 8, 24, 8)
+
+        tabLayout.addView(btnWechat)
+        tabLayout.addView(btnAlipay)
+        rootLayout.addView(tabLayout)
+
+        // 二维码图片容器
+        val frameLayout = android.widget.FrameLayout(this)
+        val frameParams = android.widget.LinearLayout.LayoutParams(qrWidth, qrHeight)
+        frameParams.gravity = android.view.Gravity.CENTER
+        frameLayout.layoutParams = frameParams
+
         val imageView = android.widget.ImageView(this)
-        imageView.setPadding(40, 20, 40, 20)
         imageView.scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
         imageView.adjustViewBounds = true
+        imageView.layoutParams = android.view.ViewGroup.LayoutParams(
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT
+        )
+        // 默认显示微信
+        if (hasWechat) imageView.setImageBitmap(wechatBitmap)
+        else if (hasAlipay) imageView.setImageBitmap(alipayBitmap)
 
-        // 尝试加载微信支付二维码（从 assets 或 res 目录）
-        // 用户后续可放置图片到 res/drawable/ic_wechat_qr.png 或 assets/wechat_qr.png
-        var qrLoaded = false
-        try {
-            // 优先从 assets 加载
-            val inputStream = assets.open("wechat_qr.png")
-            val bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
-            inputStream.close()
-            if (bitmap != null) {
-                imageView.setImageBitmap(bitmap)
-                qrLoaded = true
-            }
-        } catch (_: Exception) {}
+        frameLayout.addView(imageView)
+        rootLayout.addView(frameLayout)
 
-        if (!qrLoaded) {
-            try {
-                // 回退从 drawable 加载
-                val resId = resources.getIdentifier("ic_wechat_qr", "drawable", packageName)
-                if (resId != 0) {
-                    imageView.setImageResource(resId)
-                    qrLoaded = true
+        // 底部提示文字
+        val hintText = android.widget.TextView(this)
+        hintText.text = "长按或截图保存二维码，打开相应 App 扫码"
+        hintText.textSize = 12f
+        hintText.gravity = android.view.Gravity.CENTER
+        hintText.setTextColor(0xFF888888.toInt())
+        hintText.setPadding(0, 12, 0, 0)
+        rootLayout.addView(hintText)
+
+        // 切换按钮样式更新
+        fun updateTabStyle(selected: String) {
+            val wechatBg = if (selected == "wechat") {
+                android.graphics.drawable.GradientDrawable().apply {
+                    setColor(0xFF07C160.toInt())
+                    setCornerRadius(20f)
                 }
-            } catch (_: Exception) {}
+            } else {
+                android.graphics.drawable.GradientDrawable().apply {
+                    setColor(0xFFE0E0E0.toInt())
+                    setCornerRadius(20f)
+                }
+            }
+            val alipayBg = if (selected == "alipay") {
+                android.graphics.drawable.GradientDrawable().apply {
+                    setColor(0xFF1677FF.toInt())
+                    setCornerRadius(20f)
+                }
+            } else {
+                android.graphics.drawable.GradientDrawable().apply {
+                    setColor(0xFFE0E0E0.toInt())
+                    setCornerRadius(20f)
+                }
+            }
+            btnWechat.background = wechatBg
+            btnWechat.setTextColor(if (selected == "wechat") -0x1 else 0xFF333333.toInt())
+            btnAlipay.background = alipayBg
+            btnAlipay.setTextColor(if (selected == "alipay") -0x1 else 0xFF333333.toInt())
         }
+        updateTabStyle("wechat")
 
-        val message = buildString {
-            appendLine("如果灵爪对你有所帮助，欢迎赞助开发者一杯咖啡 ☕")
-            appendLine()
-            appendLine("你的支持是持续改进的动力！")
-            if (!qrLoaded) {
-                appendLine()
-                appendLine("💡 微信支付二维码加载中，请稍后…")
-                appendLine("（开发者将在后续版本中更新二维码）")
+        btnWechat.setOnClickListener {
+            if (hasWechat) {
+                imageView.setImageBitmap(wechatBitmap)
+                updateTabStyle("wechat")
+            }
+        }
+        btnAlipay.setOnClickListener {
+            if (hasAlipay) {
+                imageView.setImageBitmap(alipayBitmap)
+                updateTabStyle("alipay")
             }
         }
 
-        val dialog = AlertDialog.Builder(this)
+        AlertDialog.Builder(this)
             .setTitle("赞助开发者")
-            .setMessage(message)
+            .setView(rootLayout)
             .setPositiveButton("好的", null)
-            .create()
-
-        if (qrLoaded) {
-            // 计算合适的高度（按屏幕宽度的 70% 作为图片宽度，保持比例）
-            val displayMetrics = resources.displayMetrics
-            val maxWidth = (displayMetrics.widthPixels * 0.7).toInt()
-            imageView.layoutParams = android.view.ViewGroup.LayoutParams(maxWidth, (maxWidth * 1.05).toInt())
-            dialog.setView(imageView, 40, 10, 40, 10)
-        }
-
-        dialog.show()
+            .show()
     }
 }
