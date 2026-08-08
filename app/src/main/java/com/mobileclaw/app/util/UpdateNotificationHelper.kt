@@ -19,7 +19,7 @@ object UpdateNotificationHelper {
                 "更新下载",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "显示APK更新下载进度"
+                description = "显示APK更新下载进度和实时网速"
                 setShowBadge(false)
             }
             val notificationManager =
@@ -29,16 +29,28 @@ object UpdateNotificationHelper {
     }
 
     /**
-     * 显示下载进度（支持 KB/MB 显示）。
+     * 显示下载进度（支持 KB/MB 进度 + 实时网速）。
      *
      * @param bytesRead 已下载字节数
      * @param totalBytes 总字节数（-1 表示未知）
      * @param fileName 文件名
+     * @param speedBps 当前下载速度（字节/秒），0 或负值不显示
      */
-    fun showDownloadProgress(context: Context, bytesRead: Long, totalBytes: Long, fileName: String) {
+    fun showDownloadProgress(
+        context: Context,
+        bytesRead: Long,
+        totalBytes: Long,
+        fileName: String,
+        speedBps: Long = 0L
+    ) {
         createChannel(context)
 
         val progressText = buildHumanReadableProgress(bytesRead, totalBytes)
+        val speedText = if (speedBps > 0) {
+            "\n网速: ${formatSpeed(speedBps)}"
+        } else {
+            ""
+        }
         val percentage = if (totalBytes > 0) {
             (bytesRead * 100 / totalBytes).toInt()
         } else {
@@ -52,7 +64,7 @@ object UpdateNotificationHelper {
             .setContentTitle("正在下载更新")
             .setContentText("$fileName — $progressText")
             .setStyle(NotificationCompat.BigTextStyle()
-                .bigText("$fileName\n$progressText"))
+                .bigText("$fileName\n$progressText$speedText"))
             .setProgress(max, progress, totalBytes <= 0)
             .setOngoing(true)
             .setAutoCancel(false)
@@ -87,6 +99,16 @@ object UpdateNotificationHelper {
         bytes < 1024 -> "$bytes B"
         bytes < 1024 * 1024 -> "${bytes / 1024} KB"
         else -> "${"%.1f".format(bytes.toDouble() / (1024 * 1024))} MB"
+    }
+
+    /**
+     * 格式化下载速度（自动选择 B/s / KB/s / MB/s）。
+     */
+    private fun formatSpeed(speedBps: Long): String = when {
+        speedBps < 0 -> "未知"
+        speedBps < 1024 -> "${speedBps} B/s"
+        speedBps < 1024 * 1024 -> "${speedBps / 1024} KB/s"
+        else -> "${"%.1f".format(speedBps.toDouble() / (1024 * 1024))} MB/s"
     }
 
     fun showDownloadComplete(context: Context, fileName: String) {

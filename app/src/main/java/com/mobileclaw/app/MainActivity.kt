@@ -2084,18 +2084,18 @@ class MainActivity : AppCompatActivity() {
                 return@launch
             }
 
-            // 真正的进度回调
+            // 真正的进度回调（含实时网速）
             val result = UpdateChecker.downloadApkWithProgress(
                 downloadUrl = info.downloadUrl,
                 destination = apkFile,
-                progressCallback = { bytesRead, totalBytes ->
+                progressCallback = { bytesRead, totalBytes, speedBps ->
                     runOnUiThread {
                         progressView.isIndeterminate = totalBytes <= 0
                         if (totalBytes > 0) {
                             val pct = (bytesRead * 100 / totalBytes).toInt()
                             progressView.progress = pct
                         }
-                        // 显示 KB/MB 进度
+                        // 显示 KB/MB 进度和实时网速
                         val readStr = UpdateChecker.formatFileSize(bytesRead)
                         val totalStr = if (totalBytes > 0) {
                             UpdateChecker.formatFileSize(totalBytes)
@@ -2107,11 +2107,12 @@ class MainActivity : AppCompatActivity() {
                         } else {
                             ""
                         }
-                        progressText.text = "$readStr / $totalStr$pctStr"
+                        val speedStr = UpdateChecker.formatSpeed(speedBps)
+                        progressText.text = "$readStr / $totalStr$pctStr\n网速: $speedStr"
                     }
-                    // 同时更新通知栏
+                    // 同时更新通知栏（含网速）
                     UpdateNotificationHelper.showDownloadProgress(
-                        this@MainActivity, bytesRead, totalBytes, info.apkName
+                        this@MainActivity, bytesRead, totalBytes, info.apkName, speedBps
                     )
                 }
             )
