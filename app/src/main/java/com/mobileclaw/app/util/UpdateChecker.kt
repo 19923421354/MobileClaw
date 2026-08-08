@@ -443,7 +443,7 @@ object UpdateChecker {
     /** 共享 OkHttpClient（连接池复用，避免每次新建连接的开销） */
     private val sharedClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
-            .connectTimeout(CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(DOWNLOAD_TIMEOUT_MS, TimeUnit.MILLISECONDS)
             .writeTimeout(DOWNLOAD_TIMEOUT_MS, TimeUnit.MILLISECONDS)
             .followRedirects(true)
@@ -453,16 +453,18 @@ object UpdateChecker {
             .build()
     }
 
-    /** GitHub Release 下载镜像列表（含国内加速镜像） */
+    /**
+     * 下载镜像列表。
+     * 按优先级排列，依次尝试，不预测试。
+     * 1. 直链 GitHub（官方源）
+     * 2. mirror.ghproxy.com（国内加速）
+     * 3. 移除已失效的镜像（ghproxy.net、fastgit.org）
+     */
     private val DOWNLOAD_MIRRORS = listOf(
         // 1. 直接 GitHub 下载（官方源，海外/有梯子时最快）
         { url: String -> url },
         // 2. mirror.ghproxy.com 镜像（国内加速，速度较快）
-        { url: String -> "https://mirror.ghproxy.com/$url" },
-        // 3. ghproxy.net 镜像（国内备用）
-        { url: String -> "https://ghproxy.net/$url" },
-        // 4. download.fastgit.org 镜像（GitHub 加速）
-        { url: String -> url.replace("github.com", "download.fastgit.org") }
+        { url: String -> "https://mirror.ghproxy.com/$url" }
     )
 
     /**
@@ -487,53 +489,15 @@ object UpdateChecker {
     }
 
     /**
-     * 预测试所有镜像源的速度，选择连接最快的镜像。
+     * 带进度和速度回调的 APK 下载（核心引擎，彻底重写）。
      *
-     * 通过 HEAD 请求 + 连接时间（毫秒）判断，自动跳过
-     * 连接超时或 DNS 解析失败的镜像。
-     *
-     * @param downloadUrl 原始下载地址
-     * @return 最快的镜像 URL
-     */
-    private fun selectFastestMirror(downloadUrl: String): String {
-        val results = mutableListOf<Pair<String, Long>>()
-        for (transformer in DOWNLOAD_MIRRORS) {
-            val url = transformer(downloadUrl)
-            try {
-                val start = System.nanoTime()
-                val request = Request.Builder()
-                    .url(url)
-                    .head()
-                    .header("User-Agent", "MobileClaw/2.0.9")
-                    .build()
-                val response = sharedClient.newCall(request).execute()
-                val elapsed = (System.nanoTime() - start) / 1_000_000L // 毫秒
-                response.close()
-                results.add(url to elapsed)
-                Log.d(TAG, "镜像测速: ${url.take(60)}... = ${elapsed}ms")
-            } catch (e: Exception) {
-                Log.w(TAG, "镜像测速失败: ${url.take(60)}... = ${e.message}")
-                results.add(url to Long.MAX_VALUE)
-            }
-        }
-        val best = results.minByOrNull { it.second } ?: return downloadUrl
-        Log.d(TAG, "✓ 选择最快镜像: ${best.first.take(60)}... (${best.second}ms)")
-        return best.first
-    }
-
-    /**
-     * 带进度和速度回调的 APK 下载（核心引擎）。
-     *
-     * 性能优化：
-     * - 256KB 大缓冲区，减少 read/write 循环次数约 97%
-     * - OkHttp 连接池复用（4 连接，保活 30 秒），避免重复 TCP 握手
-     * - 镜像源 HEAD 预测试，自动选择延迟最低的源
-     * - 重试指数退避：2s → 4s → 6s
-     *
-     * 用户体验：
-     * - 实时网速显示（每 500ms 采样计算）
-     * - 流畅 UI 更新（每 100ms 回调，不会卡死主线程）
-     * - 断点续传检测（已下载且 >1MB 直接跳过）
+     * 核心改进：
+     * - 无预测试：不再对每个镜像发 HEAD 请求测速，直接下载，节省 15+ 秒
+     * - 按优先级依次尝试镜像：直链 GitHub → mirror.ghproxy.com
+     * - 移除已失效的镜像源（ghproxy.net、fastgit.org）
+     * - 实时网速每 500ms 精确采样，首次回调立即显示
+     * - 256KB 大缓冲区，OkHttp 连接池复用
+     * - 安装时检查并请求 INSTALL_PACKAGES 权限
      *
      * @param downloadUrl 原始下载地址（GitHub Releases URL）
      * @param destination 保存路径
@@ -554,106 +518,112 @@ object UpdateChecker {
         // 确保父目录存在
         destination.parentFile?.mkdirs()
 
-        // 预测试所有镜像，选择最快的镜像源
-        val bestMirrorUrl = selectFastestMirror(downloadUrl)
+        // 构建所有镜像 URL（按优先级排列）
+        val urlsToTry = DOWNLOAD_MIRRORS.map { it(downloadUrl) }
 
-        // 使用选中的最快镜像进行下载，最多重试 MAX_RETRIES 次
-        for (retry in 0 until MAX_RETRIES) {
-            Log.d(TAG, "下载尝试 [第${retry + 1}次]: ${bestMirrorUrl.take(80)}...")
+        // 依次尝试每个镜像，不预测试，直接下载
+        for ((mirrorIdx, mirrorUrl) in urlsToTry.withIndex()) {
+            for (retry in 0 until MAX_RETRIES) {
+                Log.d(TAG, "下载尝试 [镜像${mirrorIdx + 1}/${urlsToTry.size}, 第${retry + 1}次]: ${mirrorUrl.take(80)}...")
 
-            try {
-                val request = Request.Builder()
-                    .url(bestMirrorUrl)
-                    .header("User-Agent", "MobileClaw/2.0.9")
-                    .header("Accept", "application/octet-stream")
-                    .build()
+                try {
+                    val request = Request.Builder()
+                        .url(mirrorUrl)
+                        .header("User-Agent", "MobileClaw/2.1.0")
+                        .header("Accept", "application/octet-stream")
+                        .build()
 
-                val response = sharedClient.newCall(request).execute()
-                if (!response.isSuccessful) {
-                    Log.w(TAG, "下载失败: HTTP ${response.code}")
-                    response.close()
-                    if (retry < MAX_RETRIES - 1) {
-                        delay(RETRY_DELAY_MS * (retry + 1)) // 指数退避
-                        continue
+                    val response = sharedClient.newCall(request).execute()
+                    if (!response.isSuccessful) {
+                        Log.w(TAG, "下载失败: HTTP ${response.code}")
+                        response.close()
+                        if (retry < MAX_RETRIES - 1) {
+                            delay(RETRY_DELAY_MS * (retry + 1))
+                            continue
+                        }
+                        break // 换下一个镜像
                     }
-                    return@withContext DownloadResult(false, "HTTP ${response.code}")
-                }
 
-                val body = response.body
-                if (body == null) {
-                    Log.w(TAG, "响应体为空")
-                    response.close()
-                    return@withContext DownloadResult(false, "响应体为空")
-                }
+                    val body = response.body
+                    if (body == null) {
+                        Log.w(TAG, "响应体为空")
+                        response.close()
+                        break
+                    }
 
-                val totalBytes = body.contentLength()
-                var bytesRead = 0L
-                var lastSpeedSampleTime = System.nanoTime()
-                var lastSpeedSampleBytes = 0L
-                var currentSpeed = 0L
-                var lastCallbackTime = 0L
+                    val totalBytes = body.contentLength()
+                    var bytesRead = 0L
+                    // 速度采样：用滑动窗口，每 500ms 计算一次瞬时速度
+                    var lastSpeedSampleTime = System.nanoTime()
+                    var lastSpeedSampleBytes = 0L
+                    var currentSpeed = 0L
+                    var lastCallbackTime = 0L
 
-                FileOutputStream(destination).use { output ->
-                    body.byteStream().use { input ->
-                        val buffer = ByteArray(BUFFER_SIZE)
-                        var bytesReadThisChunk: Int
+                    // 首次回调：立即显示初始状态
+                    progressCallback(0, if (totalBytes > 0) totalBytes else -1L, 0L)
 
-                        // 首次回调：告知开始下载
-                        progressCallback(0, if (totalBytes > 0) totalBytes else -1L, 0L)
+                    FileOutputStream(destination).use { output ->
+                        body.byteStream().use { input ->
+                            val buffer = ByteArray(BUFFER_SIZE)
+                            var bytesReadThisChunk: Int
 
-                        // 主下载循环：每次读取 256KB，大幅减少 I/O 次数
-                        while (input.read(buffer).also { bytesReadThisChunk = it } != -1) {
-                            output.write(buffer, 0, bytesReadThisChunk)
-                            bytesRead += bytesReadThisChunk
+                            // 主下载循环：每次读取 256KB
+                            while (input.read(buffer).also { bytesReadThisChunk = it } != -1) {
+                                output.write(buffer, 0, bytesReadThisChunk)
+                                bytesRead += bytesReadThisChunk
 
-                            // 实时网速采样：每 500ms 计算一次
-                            val now = System.nanoTime()
-                            val elapsedSinceSample = (now - lastSpeedSampleTime) / 1_000_000L
-                            if (elapsedSinceSample >= SPEED_SAMPLE_INTERVAL_MS) {
-                                val bytesSinceSample = bytesRead - lastSpeedSampleBytes
-                                currentSpeed = if (elapsedSinceSample > 0) {
-                                    (bytesSinceSample * 1000L) / elapsedSinceSample
-                                } else 0L
-                                lastSpeedSampleTime = now
-                                lastSpeedSampleBytes = bytesRead
-                            }
+                                val now = System.nanoTime()
+                                val elapsedSinceSample = (now - lastSpeedSampleTime) / 1_000_000L
 
-                            // UI 更新：每 100ms 回调一次，保证流畅不卡顿
-                            val elapsedSinceCallback = (now - lastCallbackTime) / 1_000_000L
-                            if (elapsedSinceCallback >= PROGRESS_INTERVAL_MS) {
-                                lastCallbackTime = now
-                                progressCallback(bytesRead, totalBytes, currentSpeed)
+                                // 每 500ms 精确采样一次速度
+                                if (elapsedSinceSample >= SPEED_SAMPLE_INTERVAL_MS) {
+                                    val bytesSinceSample = bytesRead - lastSpeedSampleBytes
+                                    currentSpeed = if (elapsedSinceSample > 0 && bytesSinceSample > 0) {
+                                        (bytesSinceSample * 1000L) / elapsedSinceSample
+                                    } else 0L
+                                    lastSpeedSampleTime = now
+                                    lastSpeedSampleBytes = bytesRead
+                                }
+
+                                // 每 100ms 更新 UI（首次更新也在 100ms 内，不会等 500ms）
+                                val elapsedSinceCallback = (now - lastCallbackTime) / 1_000_000L
+                                if (elapsedSinceCallback >= PROGRESS_INTERVAL_MS) {
+                                    lastCallbackTime = now
+                                    // 如果还没到第一次速度采样，用平均速度
+                                    val displaySpeed = if (currentSpeed > 0) currentSpeed else {
+                                        val totalElapsed = (now - lastSpeedSampleTime) / 1_000_000L
+                                        if (totalElapsed > 0) (bytesRead * 1000L) / totalElapsed else 0L
+                                    }
+                                    progressCallback(bytesRead, totalBytes, displaySpeed)
+                                }
                             }
                         }
                     }
-                }
 
-                // 下载完成，最终回调（100% + 最终速度）
-                progressCallback(bytesRead, totalBytes, currentSpeed)
+                    // 下载完成，最终回调
+                    progressCallback(bytesRead, totalBytes, currentSpeed)
 
-                // 校验下载结果
-                val fileSize = destination.length()
-                Log.d(TAG, "✓ 下载完成: ${destination.absolutePath} (${formatFileSize(fileSize)})")
+                    // 校验下载结果
+                    val fileSize = destination.length()
+                    Log.d(TAG, "✓ 下载完成: ${destination.absolutePath} (${formatFileSize(fileSize)})")
 
-                if (fileSize == 0L) {
+                    if (fileSize > 0) {
+                        return@withContext DownloadResult(true, "下载成功")
+                    }
+
                     Log.e(TAG, "下载的文件大小为 0，视为失败")
                     destination.delete()
-                    continue
-                }
-
-                return@withContext DownloadResult(true, "下载成功")
-            } catch (e: Exception) {
-                Log.e(TAG, "下载异常 [第${retry + 1}次]: ${e.message}", e)
-                // 清理损坏的文件
-                if (destination.exists()) destination.delete()
-                if (retry < MAX_RETRIES - 1) {
-                    val delay = RETRY_DELAY_MS * (retry + 1) // 指数退避
-                    delay(delay)
+                } catch (e: Exception) {
+                    Log.e(TAG, "下载异常 [镜像${mirrorIdx + 1}, 第${retry + 1}次]: ${e.message}")
+                    if (destination.exists()) destination.delete()
+                    if (retry < MAX_RETRIES - 1) {
+                        delay(RETRY_DELAY_MS * (retry + 1))
+                    }
                 }
             }
         }
 
-        // 所有重试都失败
+        // 所有镜像和重试都失败
         Log.e(TAG, "✗ 所有下载尝试均失败")
         DownloadResult(false, "所有下载源均不可达，请检查网络连接")
     }
@@ -673,9 +643,24 @@ object UpdateChecker {
 
     /**
      * 触发 APK 安装（通过系统安装 Intent）。
+     * 自动处理 Android 8+ 的「未知来源应用安装」权限。
      */
     fun installApk(context: android.content.Context, apkFile: File) {
         try {
+            // Android 8+ (API 26+) 需要 REQUEST_INSTALL_PACKAGES 权限
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                if (!context.packageManager.canRequestPackageInstalls()) {
+                    // 引导用户开启安装权限
+                    val intent = android.content.Intent(
+                        android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        android.net.Uri.parse("package:${context.packageName}")
+                    ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(intent)
+                    Log.d(TAG, "引导用户开启安装未知来源应用权限")
+                    return
+                }
+            }
+
             val uri = androidx.core.content.FileProvider.getUriForFile(
                 context,
                 "${context.packageName}.fileprovider",
@@ -685,10 +670,26 @@ object UpdateChecker {
                 setDataAndType(uri, "application/vnd.android.package-archive")
                 addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
             }
             context.startActivity(intent)
+            Log.d(TAG, "安装 Intent 已发送: ${apkFile.absolutePath}")
         } catch (e: Exception) {
             Log.e(TAG, "安装 APK 失败", e)
+            // 如果 FileProvider 方式失败，尝试用原始 Intent 方式
+            try {
+                val fallbackIntent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                    setDataAndType(
+                        android.net.Uri.fromFile(apkFile),
+                        "application/vnd.android.package-archive"
+                    )
+                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(fallbackIntent)
+            } catch (e2: Exception) {
+                Log.e(TAG, "备用安装方式也失败", e2)
+            }
         }
     }
 
