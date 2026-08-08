@@ -586,6 +586,70 @@ class ClawController(
     /** 获取对话摘要（用于 UI 展示）。 */
     fun getConversationDigest(): String = conversationSummarizer.getSummary()
 
+    // =========================================================================
+    //  总结与记忆增强功能（v2.0.7+）
+    // =========================================================================
+
+    /** 总结打包器 */
+    val summaryPackage = SummaryPackage()
+
+    /**
+     * 获取当前对话的上下文包（供新 AI 接续）。
+     * 将对话历史打包为结构化文本，新 AI 收到后能完美接续上下文。
+     */
+    suspend fun getContextPackage(
+        context: android.content.Context,
+        sessionInfo: SummaryPackage.SessionInfo = SummaryPackage.SessionInfo()
+    ): SummaryPackage.ContextPackage {
+        val mode = SummarySettings.getSummaryMode(context)
+        val wordCount = SummarySettings.getSummaryWordCount(context)
+        val digest = conversationSummarizer.summarize(memory.entries)
+        return summaryPackage.packageContext(
+            entries = memory.entries,
+            digest = digest,
+            mode = mode,
+            wordCount = wordCount,
+            sessionInfo = sessionInfo
+        )
+    }
+
+    /**
+     * 将上下文包保存为文件（供分享/发送给新 AI）。
+     * @return 保存的文件路径，失败返回 null
+     */
+    fun saveContextPackageToFile(
+        context: android.content.Context,
+        pkg: SummaryPackage.ContextPackage
+    ): java.io.File? = summaryPackage.saveToFile(context, pkg)
+
+    /**
+     * 获取当前对话的摘要统计信息。
+     */
+    fun getSummaryStats(context: android.content.Context): String {
+        val mode = SummarySettings.getSummaryMode(context)
+        val freq = SummarySettings.getSummaryFrequency(context)
+        val wordCount = SummarySettings.getSummaryWordCount(context)
+        val tokenLimit = SummarySettings.getTokenLimit(context)
+        val autoEnabled = SummarySettings.isAutoSummaryEnabled(context)
+        val memoryPersistent = SummarySettings.isMemoryPersistent(context)
+        val msgCount = memory.getMessageCount()
+
+        return buildString {
+            appendLine("═══ 总结与记忆设置 ═══")
+            appendLine()
+            appendLine("总结模式: ${mode.displayName}")
+            appendLine("总结频率: ${freq.displayName}")
+            appendLine("目标字数: ${wordCount.displayName}")
+            appendLine("Token上限: ${tokenLimit.displayName}")
+            appendLine("自动总结: ${if (autoEnabled) "开启" else "关闭"}")
+            appendLine("记忆持久化: ${if (memoryPersistent) "开启" else "关闭"}")
+            appendLine("当前消息计数: ${msgCount}条")
+            appendLine()
+            appendLine("记忆条目: ${memory.entries.size}条")
+            appendLine("经验记忆: ${experienceMemory.getSummary()}")
+        }
+    }
+
     /** 获取自适应提示词优化统计摘要（用于 UI 展示）。 */
     fun getPromptOptimizationStats(): String = promptOptimizer.getOptimizationStats()
 

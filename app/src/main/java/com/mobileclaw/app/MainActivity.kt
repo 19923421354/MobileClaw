@@ -860,6 +860,11 @@ class MainActivity : AppCompatActivity() {
             showSponsorDialog()
         }
 
+        // 设置页底部按钮：总结与记忆设置
+        dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnSummarySettings)?.setOnClickListener {
+            showSummarySettingsDialog()
+        }
+
         AlertDialog.Builder(this)
             .setTitle("AI 模型配置")
             .setView(dialogView)
@@ -1050,10 +1055,15 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        val options = arrayOf("最近5分钟", "最近30分钟", "全部对话", "查看统计摘要")
+        val options = arrayOf("最近5分钟", "最近30分钟", "全部对话", "查看统计摘要", "打包为上下文（供新AI接续）")
         AlertDialog.Builder(this)
             .setTitle("智能总结")
             .setItems(options) { _, which ->
+                if (which == 4) {
+                    // 打包为上下文
+                    showContextPackageDialog(controller)
+                    return@setItems
+                }
                 val mins = when (which) {
                     0 -> 5L
                     1 -> 30L
@@ -1104,6 +1114,7 @@ class MainActivity : AppCompatActivity() {
                             3 -> {
                                 // 统计摘要
                                 "═══ 统计摘要 ═══\n\n" +
+                                controller.getSummaryStats(this@MainActivity) + "\n\n" +
                                 controller.getTokenStats() + "\n\n" +
                                 controller.getPerformanceSummary()
                             }
@@ -1136,6 +1147,311 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton("关闭", null)
             .show()
+    }
+
+    /**
+     * 显示上下文打包对话框。
+     * 将对话历史打包为结构化文本，新 AI 收到后能完美接续上下文。
+     */
+    private fun showContextPackageDialog(controller: com.mobileclaw.app.ai.ClawController) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                // 获取打包后的上下文
+                val pkg = controller.getContextPackage(this@MainActivity)
+
+                withContext(Dispatchers.Main) {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("上下文包已生成")
+                        .setMessage(
+                            "打包完成！\n\n" +
+                            "格式: 纯文本\n" +
+                            "字符数: ${pkg.charCount}\n" +
+                            "估算 Token: ${pkg.estimatedTokens}\n\n" +
+                            "你可以：\n" +
+                            "1. 复制到剪贴板，粘贴到新 AI 的输入框\n" +
+                            "2. 保存为文件，发送给新 AI\n" +
+                            "3. 填入输入框，继续当前会话"
+                        )
+                        .setPositiveButton("复制上下文包") { _, _ ->
+                            val clipboard = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                            val clip = android.content.ClipData.newPlainText("上下文包", pkg.text)
+                            clipboard.setPrimaryClip(clip)
+                            showToast("上下文包已复制（${pkg.estimatedTokens} Token），粘贴到新 AI 即可接续")
+                        }
+                        .setNeutralButton("保存为文件") { _, _ ->
+                            val file = controller.saveContextPackageToFile(this@MainActivity, pkg)
+                            if (file != null) {
+                                showToast("已保存到: ${file.name}")
+                                // 提供分享
+                                try {
+                                    val uri = androidx.core.content.FileProvider.getUriForFile(
+                                        this@MainActivity,
+                                        "${packageName}.fileprovider",
+                                        file
+                                    )
+                                    val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    startActivity(android.content.Intent.createChooser(shareIntent, "分享上下文包"))
+                                } catch (_: Exception) {
+                                    showToast("文件已保存到缓存目录")
+                                }
+                            } else {
+                                showToast("保存失败")
+                            }
+                        }
+                        .setNegativeButton("填入输入框") { _, _ ->
+                            binding.editInput.setText(pkg.text)
+                            showToast("上下文包已填入输入框（${pkg.estimatedTokens} Token），发送即可")
+                        }
+                        .show()
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("打包失败")
+                        .setMessage("生成上下文包失败：${e.message?.take(100) ?: "未知错误"}")
+                        .setPositiveButton("好的", null)
+                        .show()
+                }
+            }
+        }
+    }
+
+    /**
+     * 显示总结与记忆设置对话框。
+     * 包含：总结模式、频率、字数、Token 上限、自动总结开关、记忆持久化。
+     */
+    private fun showSummarySettingsDialog() {
+        val controller = MobileClawApp.clawController ?: run {
+            showToast("请先开启无障碍服务")
+            return
+        }
+
+        // 当前设置
+        val currentMode = com.mobileclaw.app.ai.SummarySettings.getSummaryMode(this)
+        val currentFreq = com.mobileclaw.app.ai.SummarySettings.getSummaryFrequency(this)
+        val currentWordCount = com.mobileclaw.app.ai.SummarySettings.getSummaryWordCount(this)
+        val currentTokenLimit = com.mobileclaw.app.ai.SummarySettings.getTokenLimit(this)
+        val autoSummary = com.mobileclaw.app.ai.SummarySettings.isAutoSummaryEnabled(this)
+        val memoryPersistent = com.mobileclaw.app.ai.SummarySettings.isMemoryPersistent(this)
+        val msgCount = controller.memory.getMessageCount()
+
+        // 模式选项
+        val modeNames = com.mobileclaw.app.ai.SummarySettings.SummaryMode.entries.map { it.displayName }.toTypedArray()
+        val modeIndex = com.mobileclaw.app.ai.SummarySettings.SummaryMode.entries.indexOf(currentMode).coerceAtLeast(0)
+
+        // 频率选项
+        val freqNames = com.mobileclaw.app.ai.SummarySettings.SummaryFrequency.entries.map { it.displayName }.toTypedArray()
+        val freqIndex = com.mobileclaw.app.ai.SummarySettings.SummaryFrequency.entries.indexOf(currentFreq).coerceAtLeast(0)
+
+        // 字数选项
+        val wordCountNames = com.mobileclaw.app.ai.SummarySettings.SummaryWordCount.entries.map { it.displayName }.toTypedArray()
+        val wordCountIndex = com.mobileclaw.app.ai.SummarySettings.SummaryWordCount.entries.indexOf(currentWordCount).coerceAtLeast(0)
+
+        // Token 上限选项
+        val tokenLimitNames = com.mobileclaw.app.ai.SummarySettings.TokenLimit.entries.map { it.displayName }.toTypedArray()
+        val tokenLimitIndex = com.mobileclaw.app.ai.SummarySettings.TokenLimit.entries.indexOf(currentTokenLimit).coerceAtLeast(0)
+
+        // 构建设置界面
+        val scrollView = android.widget.ScrollView(this)
+        val container = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(40, 20, 40, 20)
+        }
+
+        // 标题：总结模式
+        container.addView(android.widget.TextView(this).apply {
+            text = "总结模式"
+            textSize = 16f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setTextColor(0xFF333333.toInt())
+        })
+        container.addView(android.widget.TextView(this).apply {
+            text = "无上限模式自动关闭智能节省 Token"
+            textSize = 12f
+            setTextColor(0xFF999999.toInt())
+            setPadding(0, 0, 0, 12)
+        })
+        val modeSpinner = android.widget.Spinner(this)
+        android.widget.ArrayAdapter(this, android.R.layout.simple_spinner_item, modeNames).also {
+            it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            modeSpinner.adapter = it
+        }
+        modeSpinner.setSelection(modeIndex)
+        container.addView(modeSpinner)
+
+        // 分隔线
+        container.addView(createDivider())
+
+        // 标题：总结频率
+        container.addView(android.widget.TextView(this).apply {
+            text = "自动总结频率"
+            textSize = 16f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setTextColor(0xFF333333.toInt())
+        })
+        container.addView(android.widget.TextView(this).apply {
+            text = "每 N 条消息自动生成一次总结，仅手动则不自动总结"
+            textSize = 12f
+            setTextColor(0xFF999999.toInt())
+            setPadding(0, 0, 0, 12)
+        })
+        val freqSpinner = android.widget.Spinner(this)
+        android.widget.ArrayAdapter(this, android.R.layout.simple_spinner_item, freqNames).also {
+            it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            freqSpinner.adapter = it
+        }
+        freqSpinner.setSelection(freqIndex)
+        container.addView(freqSpinner)
+
+        // 分隔线
+        container.addView(createDivider())
+
+        // 标题：总结字数
+        container.addView(android.widget.TextView(this).apply {
+            text = "总结字数"
+            textSize = 16f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setTextColor(0xFF333333.toInt())
+        })
+        container.addView(android.widget.TextView(this).apply {
+            text = "字数越少 Token 越省，但效果可能较差"
+            textSize = 12f
+            setTextColor(0xFF999999.toInt())
+            setPadding(0, 0, 0, 12)
+        })
+        val wordCountSpinner = android.widget.Spinner(this)
+        android.widget.ArrayAdapter(this, android.R.layout.simple_spinner_item, wordCountNames).also {
+            it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            wordCountSpinner.adapter = it
+        }
+        wordCountSpinner.setSelection(wordCountIndex)
+        container.addView(wordCountSpinner)
+
+        // 分隔线
+        container.addView(createDivider())
+
+        // 标题：Token 输出上限
+        container.addView(android.widget.TextView(this).apply {
+            text = "Token 输出上限"
+            textSize = 16f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setTextColor(0xFF333333.toInt())
+        })
+        container.addView(android.widget.TextView(this).apply {
+            text = "自定义 AI 输出的最大 Token 数"
+            textSize = 12f
+            setTextColor(0xFF999999.toInt())
+            setPadding(0, 0, 0, 12)
+        })
+        val tokenLimitSpinner = android.widget.Spinner(this)
+        android.widget.ArrayAdapter(this, android.R.layout.simple_spinner_item, tokenLimitNames).also {
+            it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            tokenLimitSpinner.adapter = it
+        }
+        tokenLimitSpinner.setSelection(tokenLimitIndex)
+        container.addView(tokenLimitSpinner)
+
+        // 分隔线
+        container.addView(createDivider())
+
+        // 开关：自动总结
+        val switchAutoSummary = androidx.appcompat.widget.SwitchCompat(this).apply {
+            text = "自动总结"
+            isChecked = autoSummary
+            setPadding(0, 8, 0, 8)
+            setTextSize(16f)
+        }
+        container.addView(switchAutoSummary)
+
+        // 开关：记忆持久化
+        val switchMemoryPersist = androidx.appcompat.widget.SwitchCompat(this).apply {
+            text = "记忆持久化（跨会话保留）"
+            isChecked = memoryPersistent
+            setPadding(0, 8, 0, 8)
+            setTextSize(16f)
+        }
+        container.addView(switchMemoryPersist)
+
+        // 状态信息
+        container.addView(createDivider())
+        container.addView(android.widget.TextView(this).apply {
+            text = "当前状态"
+            textSize = 16f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setTextColor(0xFF333333.toInt())
+        })
+        container.addView(android.widget.TextView(this).apply {
+            text = "消息计数: ${msgCount}条 | 记忆条目: ${controller.memory.entries.size}条"
+            textSize = 13f
+            setTextColor(0xFF666666.toInt())
+            setPadding(0, 4, 0, 12)
+        })
+
+        scrollView.addView(container)
+
+        AlertDialog.Builder(this)
+            .setTitle("总结与记忆设置")
+            .setView(scrollView)
+            .setPositiveButton("保存") { _, _ ->
+                val selectedMode = com.mobileclaw.app.ai.SummarySettings.SummaryMode.entries[modeSpinner.selectedItemPosition]
+                val selectedFreq = com.mobileclaw.app.ai.SummarySettings.SummaryFrequency.entries[freqSpinner.selectedItemPosition]
+                val selectedWordCount = com.mobileclaw.app.ai.SummarySettings.SummaryWordCount.entries[wordCountSpinner.selectedItemPosition]
+                val selectedTokenLimit = com.mobileclaw.app.ai.SummarySettings.TokenLimit.entries[tokenLimitSpinner.selectedItemPosition]
+
+                // 保存设置
+                com.mobileclaw.app.ai.SummarySettings.setSummaryMode(this, selectedMode)
+                com.mobileclaw.app.ai.SummarySettings.setSummaryFrequency(this, selectedFreq)
+                com.mobileclaw.app.ai.SummarySettings.setSummaryWordCount(this, selectedWordCount)
+                com.mobileclaw.app.ai.SummarySettings.setTokenLimit(this, selectedTokenLimit)
+                com.mobileclaw.app.ai.SummarySettings.setAutoSummaryEnabled(this, switchAutoSummary.isChecked)
+                com.mobileclaw.app.ai.SummarySettings.setMemoryPersistent(this, switchMemoryPersist.isChecked)
+
+                // 模式联动：无上限模式自动关闭智能节省
+                when (selectedMode) {
+                    com.mobileclaw.app.ai.SummarySettings.SummaryMode.UNLIMITED -> {
+                        com.mobileclaw.app.ai.SummarySettings.enableUnlimitedMode(this)
+                        showToast("无上限模式已开启，智能节省 Token 已自动关闭")
+                    }
+                    com.mobileclaw.app.ai.SummarySettings.SummaryMode.SMART_SAVING -> {
+                        com.mobileclaw.app.ai.SummarySettings.enableSmartSavingMode(this)
+                        showToast("智能节省模式已开启")
+                    }
+                    else -> showToast("设置已保存")
+                }
+
+                // 同步记忆持久化
+                if (switchMemoryPersist.isChecked) {
+                    controller.memory.persist(this)
+                } else {
+                    controller.memory.clearPersisted(this)
+                }
+            }
+            .setNeutralButton("重置为默认") { _, _ ->
+                com.mobileclaw.app.ai.SummarySettings.setSummaryMode(this, com.mobileclaw.app.ai.SummarySettings.SummaryMode.SMART_SAVING)
+                com.mobileclaw.app.ai.SummarySettings.setSummaryFrequency(this, com.mobileclaw.app.ai.SummarySettings.SummaryFrequency.EVERY_3)
+                com.mobileclaw.app.ai.SummarySettings.setSummaryWordCount(this, com.mobileclaw.app.ai.SummarySettings.SummaryWordCount.MEDIUM)
+                com.mobileclaw.app.ai.SummarySettings.setTokenLimit(this, com.mobileclaw.app.ai.SummarySettings.TokenLimit.MEDIUM)
+                com.mobileclaw.app.ai.SummarySettings.setAutoSummaryEnabled(this, true)
+                com.mobileclaw.app.ai.SummarySettings.setMemoryPersistent(this, true)
+                showToast("已重置为默认设置")
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    /** 创建一个分割线 View。 */
+    private fun createDivider(): android.view.View {
+        return android.widget.LinearLayout(this).apply {
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                1
+            ).apply { setMargins(0, 16, 0, 16) }
+            setBackgroundColor(0xFFE0E0E0.toInt())
+        }
     }
 
     /**

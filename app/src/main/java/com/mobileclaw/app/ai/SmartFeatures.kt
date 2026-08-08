@@ -1,5 +1,7 @@
 package com.mobileclaw.app.ai
 
+import android.content.Context
+import android.util.Log
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.JsonObject
@@ -9,23 +11,34 @@ import java.util.Date
 import java.util.Locale
 
 // =============================================================================
-//  ConversationMemory - 对话上下文记忆
+//  ConversationMemory - 对话上下文记忆（增强版）
 // =============================================================================
 
 /**
- * 对话上下文记忆管理器。
+ * 对话上下文记忆管理器（增强版）。
  *
- * 记录最近的用户指令、AI 返回的动作、执行结果以及手机状态快照，
- * 让 AI 在多轮对话中能引用历史上下文，做出更连贯的决策。
+ * **新增功能**：
+ * 1. **消息计数器**：记录已处理的消息数量，支持按频率触发自动总结
+ * 2. **记忆持久化**：支持将记忆序列化到 SharedPreferences，跨会话保留
+ * 3. **频率触发回调**：当消息数量达到设定频率时，自动触发总结回调
+ * 4. **可配置条目数**：用户可自定义保留的最大条目数
  *
- * 设计要点：
+ * 原有功能：
+ * - 记录最近的用户指令、AI 返回的动作、执行结果以及手机状态快照
  * - 采用滑动窗口策略，只保留最近 [maxEntries] 条记录，控制内存与 Token 占用
  * - 提供 [buildContextSummary] 生成简洁的上下文摘要，供系统提示词引用
  * - 线程安全：所有读写操作通过 synchronized 保护
  */
 class ConversationMemory(
-    private val maxEntries: Int = 5
+    private var maxEntries: Int = 5
 ) {
+    companion object {
+        private const val TAG = "ConversationMemory"
+        private const val PREFS_NAME = "mobileclaw"
+        private const val KEY_MEMORY_JSON = "memory_persisted_json"
+        private const val KEY_MESSAGE_COUNT = "memory_message_count"
+    }
+
     /** 单条对话记忆条目。 */
     data class MemoryEntry(
         val timestamp: Long = System.currentTimeMillis(),
@@ -39,7 +52,31 @@ class ConversationMemory(
     private val _entries = mutableListOf<MemoryEntry>()
     val entries: List<MemoryEntry> get() = synchronized(_entries) { _entries.toList() }
 
-    /** 添加一条对话记忆。 */
+    /** 消息计数器：记录自上次总结以来处理的消息数量。 */
+    @Volatile
+    private var messageCount: Int = 0
+
+    /** 获取当前消息计数。 */
+    fun getMessageCount(): Int = synchronized(this) { messageCount }
+
+    /** 自动总结触发回调。当消息数达到频率阈值时调用。 */
+    @Volatile
+    var onSummaryTrigger: ((entries: List<MemoryEntry>, messageCount: Int) -> Unit)? = null
+
+    /**
+     * 更新最大条目数（运行时动态调整）。
+     * 如果新的最大值小于当前条目数，自动裁剪旧条目。
+     */
+    fun updateMaxEntries(newMax: Int) {
+        synchronized(_entries) {
+            maxEntries = newMax
+            while (_entries.size > maxEntries) {
+                _entries.removeAt(0)
+            }
+        }
+    }
+
+    /** 添加一条对话记忆，并增加消息计数。 */
     fun add(entry: MemoryEntry) {
         synchronized(_entries) {
             _entries.add(entry)
@@ -47,11 +84,45 @@ class ConversationMemory(
                 _entries.removeAt(0)
             }
         }
+        // 增加消息计数
+        synchronized(this) {
+            messageCount++
+        }
+        Log.d(TAG, "记忆已添加，当前条目: ${_entries.size}, 消息计数: $messageCount")
     }
 
-    /** 清空记忆。 */
+    /** 清空记忆，同时重置消息计数器。 */
     fun clear() {
         synchronized(_entries) { _entries.clear() }
+        synchronized(this) { messageCount = 0 }
+        Log.d(TAG, "记忆已清空，消息计数器已重置")
+    }
+
+    /**
+     * 检查是否达到总结触发频率。
+     *
+     * @param frequency 用户设定的总结频率（消息间隔数），0 表示仅手动
+     * @return 达到频率返回 true，并重置计数器
+     */
+    fun checkAndResetSummaryTrigger(frequency: Int): Boolean {
+        if (frequency <= 0) return false
+        synchronized(this) {
+            if (messageCount >= frequency) {
+                messageCount = 0
+                return true
+            }
+            return false
+        }
+    }
+
+    /**
+     * 手动触发总结回调。
+     * 供 UI 手动总结时调用，不会重置计数器。
+     */
+    fun triggerManualSummary() {
+        val currentEntries = entries
+        if (currentEntries.isEmpty()) return
+        onSummaryTrigger?.invoke(currentEntries, messageCount)
     }
 
     /**
@@ -82,6 +153,225 @@ class ConversationMemory(
             entry.userCommand.contains(command, ignoreCase = true) &&
             !entry.success
         }
+    }
+
+    // =========================================================================
+    //  持久化方法
+    // =========================================================================
+
+    /**
+     * 将记忆序列化为 JSON 并保存到 SharedPreferences。
+     *
+     * @param context Android 上下文
+     */
+    fun persist(context: Context) {
+        try {
+            val json = serializeToJson()
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.edit()
+                .putString(KEY_MEMORY_JSON, json)
+                .putInt(KEY_MESSAGE_COUNT, messageCount)
+                .apply()
+            Log.d(TAG, "记忆已持久化 (${_entries.size} 条, 消息计数: $messageCount)")
+        } catch (e: Exception) {
+            Log.e(TAG, "记忆持久化失败", e)
+        }
+    }
+
+    /**
+     * 从 SharedPreferences 恢复记忆。
+     *
+     * @param context Android 上下文
+     * @return 成功恢复返回 true
+     */
+    fun restore(context: Context): Boolean {
+        return try {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val json = prefs.getString(KEY_MEMORY_JSON, null) ?: return false
+            deserializeFromJson(json)
+            messageCount = prefs.getInt(KEY_MESSAGE_COUNT, 0)
+            Log.d(TAG, "记忆已恢复 (${_entries.size} 条, 消息计数: $messageCount)")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "记忆恢复失败", e)
+            false
+        }
+    }
+
+    /**
+     * 清除持久化的记忆数据。
+     */
+    fun clearPersisted(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit()
+            .remove(KEY_MEMORY_JSON)
+            .remove(KEY_MESSAGE_COUNT)
+            .apply()
+        Log.d(TAG, "持久化记忆已清除")
+    }
+
+    /**
+     * 将记忆序列化为 JSON 字符串。
+     * 格式：{"entries": [...], "version": 1}
+     */
+    private fun serializeToJson(): String {
+        val sb = StringBuilder()
+        sb.append("{\"version\":1,\"entries\":[")
+        val list = entries
+        list.forEachIndexed { index, entry ->
+            if (index > 0) sb.append(",")
+            sb.append("{")
+            sb.append("\"ts\":${entry.timestamp},")
+            sb.append("\"cmd\":${jsonEscape(entry.userCommand)},")
+            sb.append("\"acts\":[")
+            entry.actions.forEachIndexed { ai, a ->
+                if (ai > 0) sb.append(",")
+                sb.append(jsonEscape(a))
+            }
+            sb.append("],")
+            sb.append("\"ok\":${entry.success},")
+            sb.append("\"sum\":${jsonEscape(entry.summary)},")
+            sb.append("\"phone\":${jsonEscape(entry.phoneStateSummary)}")
+            sb.append("}")
+        }
+        sb.append("]}")
+        return sb.toString()
+    }
+
+    /**
+     * 从 JSON 字符串恢复记忆。
+     */
+    private fun deserializeFromJson(json: String) {
+        try {
+            // 简单 JSON 解析，不依赖外部库
+            val entries = mutableListOf<MemoryEntry>()
+            // 提取 entries 数组部分
+            val entriesStart = json.indexOf("\"entries\":[")
+            if (entriesStart == -1) return
+            val arrayStart = json.indexOf('[', entriesStart)
+            val arrayEnd = json.lastIndexOf(']')
+            if (arrayStart == -1 || arrayEnd == -1 || arrayEnd <= arrayStart) return
+
+            val arrayContent = json.substring(arrayStart + 1, arrayEnd)
+            if (arrayContent.isBlank()) return
+
+            // 逐个解析对象
+            var depth = 0
+            var objStart = -1
+            for (i in arrayContent.indices) {
+                val c = arrayContent[i]
+                when (c) {
+                    '{' -> {
+                        if (depth == 0) objStart = i
+                        depth++
+                    }
+                    '}' -> {
+                        depth--
+                        if (depth == 0 && objStart >= 0) {
+                            val objStr = arrayContent.substring(objStart, i + 1)
+                            parseEntry(objStr)?.let { entries.add(it) }
+                            objStart = -1
+                        }
+                    }
+                }
+            }
+
+            synchronized(_entries) {
+                _entries.clear()
+                _entries.addAll(entries)
+                // 裁剪到 maxEntries
+                while (_entries.size > maxEntries) {
+                    _entries.removeAt(0)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "JSON 解析失败", e)
+        }
+    }
+
+    private fun parseEntry(obj: String): MemoryEntry? {
+        return try {
+            val ts = extractLong(obj, "\"ts\":")
+            val cmd = extractString(obj, "\"cmd\":")
+            val ok = extractBoolean(obj, "\"ok\":")
+            val sum = extractString(obj, "\"sum\":")
+            val phone = extractString(obj, "\"phone\":")
+
+            // 解析 actions 数组
+            val actions = mutableListOf<String>()
+            val actsStart = obj.indexOf("\"acts\":[")
+            if (actsStart >= 0) {
+                val arrStart = obj.indexOf('[', actsStart)
+                val arrEnd = obj.indexOf(']', arrStart)
+                if (arrStart >= 0 && arrEnd > arrStart) {
+                    val content = obj.substring(arrStart + 1, arrEnd)
+                    if (content.isNotBlank()) {
+                        // 以引号分割提取字符串
+                        val parts = content.split(",")
+                        parts.forEach { p ->
+                            val trimmed = p.trim().removeSurrounding("\"")
+                            if (trimmed.isNotBlank()) actions.add(trimmed)
+                        }
+                    }
+                }
+            }
+
+            if (cmd.isNullOrBlank()) return null
+
+            MemoryEntry(
+                timestamp = if (ts != null) ts else System.currentTimeMillis(),
+                userCommand = cmd,
+                actions = actions,
+                success = ok ?: true,
+                summary = sum ?: "",
+                phoneStateSummary = phone ?: ""
+            )
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun extractLong(json: String, key: String): Long? {
+        val idx = json.indexOf(key) ?: return null
+        if (idx == -1) return null
+        val start = idx + key.length
+        val end = json.indexOfAny(charArrayOf(',', '}', ']'), start)
+        if (end == -1) return null
+        return json.substring(start, end).trim().toLongOrNull()
+    }
+
+    private fun extractString(json: String, key: String): String? {
+        val idx = json.indexOf(key) ?: return null
+        if (idx == -1) return null
+        val quoteStart = json.indexOf('"', idx + key.length)
+        if (quoteStart == -1) return null
+        val quoteEnd = json.indexOf('"', quoteStart + 1)
+        if (quoteEnd == -1) return null
+        return json.substring(quoteStart + 1, quoteEnd)
+    }
+
+    private fun extractBoolean(json: String, key: String): Boolean? {
+        val idx = json.indexOf(key) ?: return null
+        if (idx == -1) return null
+        val start = idx + key.length
+        val end = json.indexOfAny(charArrayOf(',', '}', ']'), start)
+        if (end == -1) return null
+        val value = json.substring(start, end).trim()
+        return when (value) {
+            "true" -> true
+            "false" -> false
+            else -> null
+        }
+    }
+
+    private fun jsonEscape(value: String): String {
+        val escaped = value
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            .replace("\t", "\\t")
+        return "\"$escaped\""
     }
 }
 
