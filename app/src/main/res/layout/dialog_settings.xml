@@ -482,11 +482,37 @@
                 app:trackTint="@color/divider_light" />
         </LinearLayout>
 
+        <!-- 检查更新 -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnCheckUpdate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="检查更新"
+            android:textColor="@color/brand_primary"
+            android:layout_marginTop="8dp"
+            app:cornerRadius="10dp"
+            app:strokeColor="@color/brand_primary"
+            app:strokeWidth="1dp"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+
+        <!-- 赞助开发者 -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSponsorDev"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="赞助开发者"
+            android:textColor="@color/brand_primary"
+            android:layout_marginTop="8dp"
+            app:cornerRadius="10dp"
+            app:strokeColor="@color/brand_primary"
+            app:strokeWidth="1dp"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+
         <!-- 版本信息 -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="灵爪 v2.0.3 (build 23)"
+            android:text="灵爪 v2.1.0 (build 28)"
             android:textSize="12sp"
             android:textColor="@color/text_secondary"
             android:gravity="center"
