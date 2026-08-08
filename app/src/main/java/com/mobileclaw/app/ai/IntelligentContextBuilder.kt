@@ -193,10 +193,25 @@ class IntelligentContextBuilder(
         }
 
         // 3. 对话历史（非首轮任务需要）
+        // 使用增强的上下文压缩：根据任务复杂度选择合适的压缩级别
         if (taskType != TaskType.OPEN_APP && taskType != TaskType.NAVIGATE && taskType != TaskType.SYSTEM_CONTROL) {
-            val memSummary = memory.buildContextSummary()
+            val memSummary = if (complexity.level >= TaskComplexityAnalyzer.Complexity.COMPLEX.level) {
+                // 复杂任务：使用 ConversationSummarizer 进行结构化压缩
+                compressContext(memory.entries, maxScreenTextLength)
+            } else {
+                // 简单/中等任务：使用原有的摘要
+                memory.buildContextSummary()
+            }
             if (memSummary.isNotBlank() && taskType != TaskType.MULTI_STEP) {
                 contextBuilder.appendLine(memSummary)
+            }
+        }
+
+        // 4. 智能上下文增强：针对多轮对话，添加总结性上下文
+        if (memory.entries.size >= 3) {
+            val conversationSummary = compressContext(memory.entries, 100)
+            if (conversationSummary.isNotBlank()) {
+                contextBuilder.appendLine(conversationSummary)
             }
         }
 
@@ -204,6 +219,56 @@ class IntelligentContextBuilder(
         val estimatedTokens = estimateTokens(contextText)
 
         return ContextResult(taskType, contextText, estimatedTokens)
+    }
+
+    /**
+     * 使用 ConversationSummarizer 进行智能上下文压缩。
+     *
+     * 将对话历史压缩为结构化摘要，保留关键事实和待办任务。
+     * 比 [ConversationMemory.buildContextSummary] 更精准，
+     * 特别适合多轮复杂对话的上下文保留。
+     *
+     * @param entries 对话历史条目
+     * @param maxTokens 最大 Token 预算
+     * @return 压缩后的上下文文本
+     */
+    private fun compressContext(entries: List<ConversationMemory.MemoryEntry>, maxTokens: Int): String {
+        if (entries.isEmpty()) return ""
+
+        return try {
+            val summarizer = ConversationSummarizer()
+            val digest = summarizer.summarize(entries)
+            if (digest.summaries.isEmpty() && digest.keyFacts.isEmpty()) {
+                return ""
+            }
+            buildString {
+                if (digest.summaries.isNotEmpty()) {
+                    appendLine("【历史任务】")
+                    digest.summaries.take(5).forEach { s ->
+                        appendLine("• ${s.command.take(40)} → ${s.result}")
+                    }
+                }
+                if (digest.keyFacts.isNotEmpty()) {
+                    appendLine("【关键事实】")
+                    digest.keyFacts.take(3).forEach { f ->
+                        appendLine("• $f")
+                    }
+                }
+                if (digest.followUps.isNotEmpty()) {
+                    appendLine("【待办】")
+                    digest.followUps.take(2).forEach { f ->
+                        appendLine("• $f")
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            // 降级到原有摘要
+            buildString {
+                entries.takeLast(3).forEach { entry ->
+                    appendLine("• ${entry.userCommand.take(30)} → ${if (entry.success) "成功" else "失败"}")
+                }
+            }
+        }
     }
 
     /**

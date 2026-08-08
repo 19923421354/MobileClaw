@@ -451,6 +451,58 @@
                         android:background="@color/divider_light"
                         android:layout_marginHorizontal="16dp" />
 
+                    <!-- 智能总结 -->
+                    <LinearLayout
+                        android:id="@+id/profileBtnSummary"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:paddingHorizontal="16dp"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:background="?android:attr/selectableItemBackground">
+
+                        <ImageView
+                            android:layout_width="22dp"
+                            android:layout_height="22dp"
+                            android:src="@drawable/ic_action_info"
+                            android:tint="#FF8B5CF6"
+                            android:contentDescription="总结" />
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="智能总结"
+                            android:textSize="15sp"
+                            android:textColor="#FF333333"
+                            android:layout_marginStart="12dp" />
+
+                        <TextView
+                            android:id="@+id/profileSummaryStatus"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="汇总对话"
+                            android:textSize="12sp"
+                            android:textColor="@color/text_secondary" />
+
+                        <ImageView
+                            android:layout_width="18dp"
+                            android:layout_height="18dp"
+                            android:src="@drawable/ic_action_back"
+                            android:tint="#FFCCCCCC"
+                            android:rotation="180"
+                            android:layout_marginStart="6dp"
+                            android:contentDescription="箭头" />
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="@color/divider_light"
+                        android:layout_marginHorizontal="16dp" />
+
                     <!-- 统计面板 -->
                     <LinearLayout
                         android:id="@+id/profileBtnStats"

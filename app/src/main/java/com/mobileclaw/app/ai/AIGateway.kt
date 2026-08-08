@@ -73,6 +73,13 @@ class AIGateway(
     var intelligentMode: Boolean = true
 
     /**
+     * 无上限模式：开启后完全不受 Token 限制，使用最大质量配置。
+     * 与 intelligentMode 互斥，unlimitedMode 优先级更高。
+     */
+    @Volatile
+    var unlimitedMode: Boolean = false
+
+    /**
      * 兼容旧接口：tokenSavingMode 的读写委托给 [intelligentMode]。
      * 保留以避免外部反射调用（如 MainActivity 旧代码）报错。
      */
@@ -453,6 +460,13 @@ class AIGateway(
      * @return 评估结果（始终非空，最坏情况降级到本地分析）
      */
     private suspend fun evaluateTask(userInput: String): EvaluationResult {
+        // 无上限模式：完全不受限制，最大质量配置
+        if (unlimitedMode) {
+            return TaskComplexityAnalyzer.toEvaluationResult(
+                TaskComplexityAnalyzer.Complexity.UNLIMITED, userInput
+            )
+        }
+
         // 智能模式关闭：最大质量模式
         if (!intelligentMode) {
             return TaskComplexityAnalyzer.toEvaluationResult(

@@ -195,7 +195,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="智能 Token 模式"
+                    android:text="省Token模式"
                     android:textSize="14sp"
                     android:textColor="#202020" />
 
@@ -213,6 +213,44 @@
                 android:layout_height="wrap_content"
                 app:switchMinWidth="44dp"
                 app:thumbTint="@color/brand_primary"
+                app:trackTint="@color/divider_light" />
+        </LinearLayout>
+
+        <!-- 无上限 Token 模式开关 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="12dp">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="无上限模式"
+                    android:textSize="14sp"
+                    android:textColor="#202020" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="不限制 Token 上限，使用最大质量配置（注意：消耗更多 Token）"
+                    android:textSize="11sp"
+                    android:textColor="@color/text_secondary" />
+            </LinearLayout>
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/switchUnlimitedMode"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:switchMinWidth="44dp"
+                app:thumbTint="@color/brand_accent"
                 app:trackTint="@color/divider_light" />
         </LinearLayout>
 
@@ -512,7 +550,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="灵爪 v2.0.5 (build 29)"
+            android:text="灵爪 v2.0.6 (build 30)"
             android:textSize="12sp"
             android:textColor="@color/text_secondary"
             android:gravity="center"

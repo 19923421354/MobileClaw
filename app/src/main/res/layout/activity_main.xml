@@ -156,11 +156,22 @@
                     android:id="@+id/switchTokenSaving"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="智能模式"
+                    android:text="省Token"
                     android:textSize="12sp"
                     android:textColor="@color/text_secondary"
                     app:switchMinWidth="40dp"
                     app:thumbTint="@color/brand_primary"
+                    app:trackTint="@color/divider_light" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchUnlimitedMode"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="无上限"
+                    android:textSize="12sp"
+                    android:textColor="@color/text_secondary"
+                    app:switchMinWidth="40dp"
+                    app:thumbTint="@color/brand_accent"
                     app:trackTint="@color/divider_light" />
 
                 <androidx.appcompat.widget.SwitchCompat
@@ -183,7 +194,7 @@
                     android:id="@+id/switchThinking"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="思考模式"
+                    android:text="思考"
                     android:textSize="12sp"
                     android:textColor="@color/text_secondary"
                     app:switchMinWidth="40dp"

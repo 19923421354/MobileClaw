@@ -28,25 +28,65 @@ object UpdateNotificationHelper {
         }
     }
 
-    fun showDownloadProgress(context: Context, progress: Int, max: Int, fileName: String) {
+    /**
+     * 显示下载进度（支持 KB/MB 显示）。
+     *
+     * @param bytesRead 已下载字节数
+     * @param totalBytes 总字节数（-1 表示未知）
+     * @param fileName 文件名
+     */
+    fun showDownloadProgress(context: Context, bytesRead: Long, totalBytes: Long, fileName: String) {
         createChannel(context)
 
-        val percentage = if (max > 0) {
-            (progress * 100 / max)
+        val progressText = buildHumanReadableProgress(bytesRead, totalBytes)
+        val percentage = if (totalBytes > 0) {
+            (bytesRead * 100 / totalBytes).toInt()
         } else {
             0
         }
+        val max = if (totalBytes > 0) totalBytes.toInt() else 0
+        val progress = if (totalBytes > 0) bytesRead.toInt() else 0
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setContentTitle("正在下载更新")
-            .setContentText("$fileName ($percentage%)")
-            .setProgress(max, progress, false)
+            .setContentText("$fileName — $progressText")
+            .setStyle(NotificationCompat.BigTextStyle()
+                .bigText("$fileName\n$progressText"))
+            .setProgress(max, progress, totalBytes <= 0)
             .setOngoing(true)
             .setAutoCancel(false)
             .setPriority(NotificationCompat.PRIORITY_LOW)
 
         NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, builder.build())
+    }
+
+    /**
+     * 构建人类可读的下载进度文本。
+     * 例如：「3.2 MB / 15.8 MB (20%)」或「3.2 MB / 未知大小」
+     */
+    private fun buildHumanReadableProgress(bytesRead: Long, totalBytes: Long): String {
+        val readStr = formatBytes(bytesRead)
+        val totalStr = if (totalBytes > 0) {
+            formatBytes(totalBytes)
+        } else {
+            "未知大小"
+        }
+        val percentage = if (totalBytes > 0) {
+            " (${bytesRead * 100 / totalBytes}%)"
+        } else {
+            ""
+        }
+        return "$readStr / $totalStr$percentage"
+    }
+
+    /**
+     * 将字节数格式化为人类可读的大小。
+     */
+    private fun formatBytes(bytes: Long): String = when {
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+        else -> "${"%.1f".format(bytes.toDouble() / (1024 * 1024))} MB"
     }
 
     fun showDownloadComplete(context: Context, fileName: String) {

@@ -134,7 +134,7 @@ class MainActivity : AppCompatActivity() {
                     "只需开启【无障碍服务】即可使用核心功能（点击/滑动/输入/截屏等）。\n\n" +
                     "⚡ 已支持一键配置！点击右下角「⚡」按钮，有 Shizuku/STELLAR 即可一键开启无障碍，无需手动设置。\n\n" +
                     "默认使用智谱 GLM-4.7-Flash（免费模型），在设置中可切换其他模型。\n\n" +
-                    "v2.0.5 更新 — 「我的」个人中心 + 应用内更新 + 赞助开发入口：\n" +
+                    "v2.0.6 更新 — 省Token/无上限模式 + 智能总结 + 增强更新检查：\n" +
                     "🔥 全新「我的」个人中心：赞助开发、统计卡片、功能入口一站式集成\n" +
                     "🔥 应用内更新优化：API 失败自动回退直链下载，确保找到新版本\n" +
                     "🔥 修复检查更新问题：配合 GitHub Release 发布，现在检查更新真正可用\n" +
@@ -291,7 +291,8 @@ class MainActivity : AppCompatActivity() {
      */
     private fun setupModeSwitches() {
         val prefs = getSharedPreferences("mobileclaw", MODE_PRIVATE)
-        // 智能模式开关（向后兼容旧的 token_saving 键）
+
+        // 省Token模式开关（向后兼容旧的 token_saving 键）
         val intelligentEnabled = if (prefs.contains("intelligent_mode")) {
             prefs.getBoolean("intelligent_mode", true)
         } else {
@@ -303,6 +304,11 @@ class MainActivity : AppCompatActivity() {
                 .putBoolean("intelligent_mode", isChecked)
                 .putBoolean("token_saving", isChecked) // 同步旧键，避免冲突
                 .apply()
+            // 如果开启省Token模式，自动关闭无上限模式
+            if (isChecked) {
+                binding.switchUnlimitedMode.isChecked = false
+                prefs.edit().putBoolean("unlimited_mode", false).apply()
+            }
             MobileClawApp.clawController?.let { controller ->
                 try {
                     val gatewayField = controller.javaClass.getDeclaredField("gateway")
@@ -313,7 +319,31 @@ class MainActivity : AppCompatActivity() {
                     // 忽略
                 }
             }
-            showToast(if (isChecked) "智能模式已开启：按任务复杂度动态调节Token" else "智能模式已关闭：使用最大质量模式")
+            showToast(if (isChecked) "省Token模式已开启：按任务复杂度动态调节Token" else "省Token模式已关闭")
+        }
+
+        // 无上限模式开关
+        binding.switchUnlimitedMode.isChecked = prefs.getBoolean("unlimited_mode", false)
+        binding.switchUnlimitedMode.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean("unlimited_mode", isChecked).apply()
+            // 如果开启无上限模式，自动关闭省Token模式
+            if (isChecked) {
+                binding.switchTokenSaving.isChecked = false
+                prefs.edit().putBoolean("intelligent_mode", false)
+                    .putBoolean("token_saving", false).apply()
+            }
+            MobileClawApp.clawController?.let { controller ->
+                try {
+                    val gatewayField = controller.javaClass.getDeclaredField("gateway")
+                    gatewayField.isAccessible = true
+                    val gateway = gatewayField.get(controller) as com.mobileclaw.app.ai.AIGateway
+                    gateway.unlimitedMode = isChecked
+                    gateway.intelligentMode = !isChecked
+                } catch (e: Exception) {
+                    // 忽略
+                }
+            }
+            showToast(if (isChecked) "无上限模式已开启：不限制Token，使用最大质量配置" else "无上限模式已关闭")
         }
 
         // 思考模式开关
@@ -804,12 +834,14 @@ class MainActivity : AppCompatActivity() {
 
         // 填入当前模式开关状态
         val prefs = getSharedPreferences("mobileclaw", MODE_PRIVATE)
-        // 智能模式（向后兼容旧的 token_saving 键）
+        // 省Token模式（向后兼容旧的 token_saving 键）
         switchTokenSaving.isChecked = if (prefs.contains("intelligent_mode")) {
             prefs.getBoolean("intelligent_mode", true)
         } else {
             prefs.getBoolean("token_saving", true)
         }
+        val switchUnlimitedMode = dialogView.findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchUnlimitedMode)
+        switchUnlimitedMode.isChecked = prefs.getBoolean("unlimited_mode", false)
         switchThinking.isChecked = prefs.getBoolean("thinking_mode", false)
         switchActionVerification.isChecked = prefs.getBoolean("action_verification", true)
         switchLocalModel.isChecked = prefs.getBoolean("local_inference", false)
@@ -844,6 +876,7 @@ class MainActivity : AppCompatActivity() {
                 prefs.edit()
                     .putBoolean("intelligent_mode", switchTokenSaving.isChecked)
                     .putBoolean("token_saving", switchTokenSaving.isChecked)
+                    .putBoolean("unlimited_mode", switchUnlimitedMode.isChecked)
                     .putBoolean("thinking_mode", switchThinking.isChecked)
                     .putBoolean("local_inference", switchLocalModel.isChecked)
                     .putBoolean("action_verification", switchActionVerification.isChecked)
@@ -855,6 +888,7 @@ class MainActivity : AppCompatActivity() {
 
                 // 同步到主界面的开关
                 binding.switchTokenSaving.isChecked = switchTokenSaving.isChecked
+                binding.switchUnlimitedMode.isChecked = switchUnlimitedMode.isChecked
                 binding.switchThinking.isChecked = switchThinking.isChecked
                 binding.switchLocalModel.isChecked = switchLocalModel.isChecked
 
@@ -996,6 +1030,111 @@ class MainActivity : AppCompatActivity() {
                 controller.clearTraces()
                 showToast("统计和轨迹已清空")
             }
+            .show()
+    }
+
+    /**
+     * 显示智能总结对话框。
+     *
+     * 汇总对话历史，生成结构化摘要，包括：
+     * - 关键事实提取（做了什么、打开了什么应用）
+     * - 待办任务追踪（失败的操作、需要重试的任务）
+     * - 时间范围摘要（最近5分钟、30分钟、全部）
+     *
+     * 生成的摘要可直接复制或用于后续任务的上下文提示。
+     */
+    private fun showSummarizeDialog() {
+        val controller = MobileClawApp.clawController
+        if (controller == null) {
+            showToast("请先开启无障碍服务")
+            return
+        }
+
+        val options = arrayOf("最近5分钟", "最近30分钟", "全部对话", "查看统计摘要")
+        AlertDialog.Builder(this)
+            .setTitle("智能总结")
+            .setItems(options) { _, which ->
+                val mins = when (which) {
+                    0 -> 5L
+                    1 -> 30L
+                    else -> 0L
+                }
+                lifecycleScope.launch(Dispatchers.IO) {
+                    val summaryText = try {
+                        when (which) {
+                            0, 1 -> {
+                                 // 使用 ConversationSummarizer 的时间范围摘要
+                                 val durationMs = mins * 60 * 1000
+                                 val summarizer = com.mobileclaw.app.ai.ConversationSummarizer()
+                                 val memory = controller.memory
+                                 val entries = memory.entries
+                                 if (entries.isEmpty()) {
+                                     "暂无对话记录。\n\n发送指令后，这里会显示对话总结。"
+                                 } else {
+                                     val rangeSummary = summarizer.summarizeRecent(entries, durationMs)
+                                     buildString {
+                                         appendLine("═══ 对话摘要（最近${options[which]}）═══")
+                                         appendLine()
+                                         if (rangeSummary.summaries.isNotEmpty()) {
+                                             appendLine("【已完成任务】")
+                                             rangeSummary.summaries.forEach { s ->
+                                                 val timeStr = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(s.timestamp))
+                                                 appendLine("• [$timeStr] ${s.command.take(50)} → ${s.result}")
+                                             }
+                                         }
+                                         val stats = rangeSummary.stats
+                                         appendLine()
+                                         appendLine("【统计】共 ${stats.totalTasks} 条 | 成功 ${stats.successCount} | 失败 ${stats.failedCount}")
+                                         if (rangeSummary.summaries.isEmpty()) {
+                                             appendLine()
+                                             appendLine("所选时间范围内暂无对话记录。")
+                                         }
+                                     }
+                                 }
+                             }
+                            2 -> {
+                                // 全部对话
+                                val digest = controller.getConversationDigest()
+                                if (digest.isBlank()) {
+                                    "暂无对话记录。\n\n发送指令后，这里会显示对话总结。"
+                                } else {
+                                    "═══ 全部对话摘要 ═══\n\n$digest"
+                                }
+                            }
+                            3 -> {
+                                // 统计摘要
+                                "═══ 统计摘要 ═══\n\n" +
+                                controller.getTokenStats() + "\n\n" +
+                                controller.getPerformanceSummary()
+                            }
+                            else -> "暂无数据"
+                        }
+                    } catch (e: Exception) {
+                        "获取对话摘要失败：${e.message?.take(100) ?: "未知错误"}"
+                    }
+
+                    withContext(Dispatchers.Main) {
+                        AlertDialog.Builder(this@MainActivity)
+                            .setTitle("智能总结")
+                            .setMessage(summaryText)
+                            .setPositiveButton("关闭", null)
+                            .setNeutralButton("复制摘要") { _, _ ->
+                                val clipboard = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                val clip = android.content.ClipData.newPlainText("对话摘要", summaryText)
+                                clipboard.setPrimaryClip(clip)
+                                showToast("摘要已复制到剪贴板")
+                            }
+                            .setNegativeButton("作为上下文发送") { _, _ ->
+                                // 将摘要作为上下文发送给 AI
+                                val contextMsg = "以下是近期对话摘要，请参考以保持上下文连贯性：\n\n$summaryText"
+                                binding.editInput.setText(contextMsg)
+                                showToast("摘要已填入输入框，点击发送即可")
+                            }
+                            .show()
+                    }
+                }
+            }
+            .setNegativeButton("关闭", null)
             .show()
     }
 
@@ -1482,21 +1621,18 @@ class MainActivity : AppCompatActivity() {
                     updateInfoCached = info
                     showUpdateDialog(info, autoDetected = false)
                 } else {
-                    // 区别对待：检查网络连通性
-                    val networkOk = try {
-                        val url = java.net.URL("https://api.github.com")
-                        val conn = url.openConnection() as java.net.HttpURLConnection
-                        conn.connectTimeout = 3000
-                        conn.readTimeout = 3000
-                        conn.responseCode in 200..499
-                    } catch (_: Exception) { false }
+                    // 使用 UpdateChecker 的 isNetworkAvailable 检测网络连通性
+                    val networkOk = UpdateChecker.isNetworkAvailable()
 
                     AlertDialog.Builder(this@MainActivity)
                         .setTitle("检查更新")
                         .setMessage(if (networkOk) {
-                            "当前已是最新版本（v$appVersion），无需更新。\n\n如有新版本发布，会自动在应用内检测到并下载安装，无需跳转网页。"
+                            "当前已是最新版本（v$appVersion），无需更新。\n\n" +
+                            "已通过 jsDelivr CDN 镜像 + GitHub API 等多源检查，确认暂无新版本。\n\n" +
+                            "如有新版本发布，会自动在应用内检测到并下载安装。"
                         } else {
-                            "检查更新失败：无法连接到 GitHub 服务器。\n\n" +
+                            "检查更新失败：无法连接到更新服务器。\n\n" +
+                            "检测了 jsDelivr CDN、GitHub API、Gitee 等多个源均不可达。\n\n" +
                             "请检查网络连接后重试。\n\n" +
                             "你也可以前往 GitHub 查看最新版本：\n" +
                             "github.com/19923421354/MobileClaw/releases"
@@ -1582,15 +1718,16 @@ class MainActivity : AppCompatActivity() {
 
     /**
      * 下载并安装更新。
+     * 使用真实进度回调，实时显示 KB/MB 下载进度。
      * 先下载到缓存目录，然后调用系统安装器。
-     * 使用通知栏显示下载进度，替换已废弃的 ProgressDialog。
+     * 使用通知栏 + 对话框双重显示下载进度。
      */
     private fun downloadAndInstallUpdate(info: UpdateInfo) {
         // 创建通知渠道并显示初始进度
         UpdateNotificationHelper.createChannel(this)
-        UpdateNotificationHelper.showDownloadProgress(this, 0, 100, info.apkName)
+        UpdateNotificationHelper.showDownloadProgress(this, 0, 0, info.apkName)
 
-        // 显示进度对话框（替代废弃的 ProgressDialog）
+        // 显示进度对话框（显示实时 KB/MB 进度）
         val progressView = android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             isIndeterminate = true
             max = 100
@@ -1599,10 +1736,25 @@ class MainActivity : AppCompatActivity() {
                 android.view.ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { setMargins(40, 0, 40, 0) }
         }
+        val progressText = android.widget.TextView(this).apply {
+            text = "准备下载…"
+            gravity = android.view.Gravity.CENTER
+            textSize = 14f
+            setTextColor(0xFF666666.toInt())
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(0, 8, 0, 0) }
+        }
+        val progressLayout = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            addView(progressView)
+            addView(progressText)
+        }
         val downloadDialog = AlertDialog.Builder(this)
             .setTitle("下载更新")
             .setMessage("正在下载 v${info.latestVersion}…")
-            .setView(progressView)
+            .setView(progressLayout)
             .setCancelable(false)
             .show()
 
@@ -1610,49 +1762,64 @@ class MainActivity : AppCompatActivity() {
             val apkFile = File(cacheDir, info.apkName)
             // 如果已下载过且文件存在，直接安装
             if (apkFile.exists() && apkFile.length() > 1_000_000) {
-                val cachedSize = info.apkSize
-                if (cachedSize == 0L || apkFile.length() == cachedSize) {
-                    runOnUiThread { downloadDialog.dismiss() }
-                    UpdateNotificationHelper.cancelNotification(this@MainActivity)
-                    UpdateChecker.installApk(this@MainActivity, apkFile)
-                    return@launch
-                }
+                runOnUiThread { downloadDialog.dismiss() }
+                UpdateNotificationHelper.cancelNotification(this@MainActivity)
+                UpdateChecker.installApk(this@MainActivity, apkFile)
+                return@launch
             }
 
-            // 模拟下载进度（实际下载监听需要更复杂的实现）
-            val progressJob = lifecycleScope.launch {
-                var p = 0
-                while (p < 90) {
-                    delay(1000)
-                    p += (5..15).random()
-                    if (p > 90) p = 90
-                    val finalP = p
+            // 真正的进度回调
+            val result = UpdateChecker.downloadApkWithProgress(
+                downloadUrl = info.downloadUrl,
+                destination = apkFile,
+                progressCallback = { bytesRead, totalBytes ->
                     runOnUiThread {
-                        progressView.isIndeterminate = false
-                        progressView.progress = finalP
+                        progressView.isIndeterminate = totalBytes <= 0
+                        if (totalBytes > 0) {
+                            val pct = (bytesRead * 100 / totalBytes).toInt()
+                            progressView.progress = pct
+                        }
+                        // 显示 KB/MB 进度
+                        val readStr = UpdateChecker.formatFileSize(bytesRead)
+                        val totalStr = if (totalBytes > 0) {
+                            UpdateChecker.formatFileSize(totalBytes)
+                        } else {
+                            "?"
+                        }
+                        val pctStr = if (totalBytes > 0) {
+                            " (${bytesRead * 100 / totalBytes}%)"
+                        } else {
+                            ""
+                        }
+                        progressText.text = "$readStr / $totalStr$pctStr"
                     }
-                    UpdateNotificationHelper.showDownloadProgress(this@MainActivity, finalP, 100, info.apkName)
+                    // 同时更新通知栏
+                    UpdateNotificationHelper.showDownloadProgress(
+                        this@MainActivity, bytesRead, totalBytes, info.apkName
+                    )
                 }
-            }
+            )
 
-            val success = UpdateChecker.downloadApk(info.downloadUrl, apkFile)
-            progressJob.cancel()
             runOnUiThread { downloadDialog.dismiss() }
 
-            if (success) {
+            if (result.success) {
                 UpdateNotificationHelper.showDownloadComplete(this@MainActivity, info.apkName)
                 runOnUiThread {
-                    showToast("下载完成，正在启动安装…")
+                    showToast("下载完成（${UpdateChecker.formatFileSize(apkFile.length())}），正在启动安装…")
                     UpdateChecker.installApk(this@MainActivity, apkFile)
                 }
             } else {
-                UpdateNotificationHelper.showDownloadFailed(this@MainActivity, "网络连接失败")
+                val errorMsg = result.message
+                UpdateNotificationHelper.showDownloadFailed(this@MainActivity, errorMsg)
                 runOnUiThread {
                     AlertDialog.Builder(this@MainActivity)
                         .setTitle("下载失败")
-                        .setMessage("下载更新文件失败，请检查网络连接后重试。\n\n" +
-                                "你也可以通过浏览器手动下载：\n${info.releaseUrl}")
-                        .setPositiveButton("打开浏览器") { _, _ ->
+                        .setMessage("下载更新文件失败。\n原因：$errorMsg\n\n" +
+                                "已自动尝试多个镜像源，建议检查网络后重试。")
+                        .setPositiveButton("重试") { _, _ ->
+                            downloadAndInstallUpdate(info)
+                        }
+                        .setNeutralButton("打开浏览器") { _, _ ->
                             val intent = android.content.Intent(
                                 android.content.Intent.ACTION_VIEW,
                                 android.net.Uri.parse(info.releaseUrl)
@@ -1773,6 +1940,11 @@ class MainActivity : AppCompatActivity() {
             } catch (_: Exception) {
                 showToast("无法打开浏览器")
             }
+        }
+
+        // 智能总结
+        dialogView.findViewById<android.view.View>(R.id.profileBtnSummary).setOnClickListener {
+            showSummarizeDialog()
         }
 
         // 统计面板
