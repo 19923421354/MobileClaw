@@ -1086,11 +1086,80 @@ object PermissionManager {
     }
 
     /**
-     * 根据 [PermissionType] 跳转到对应的权限设置页。
+     * 直接打开系统无障碍服务设置页（逐个设置专用）。
+     *
+     * 与 [requestAccessibilityPermission] 不同，本方法不做任何 Shizuku 尝试，
+     * 直接跳转到系统设置页让用户手动开启。
+     */
+    private fun openAccessibilitySettings(context: Context) {
+        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        runCatching { context.startActivity(intent) }
+        android.widget.Toast.makeText(
+            context,
+            "请在「已安装的服务」中找到「灵爪」并开启开关",
+            android.widget.Toast.LENGTH_LONG
+        ).show()
+    }
+
+    /**
+     * 根据 [PermissionType] 跳转到对应的权限设置页（逐个设置专用）。
+     *
+     * 与 [requestPermission] 不同，本方法不做任何自动尝试（如 Shizuku 一键开启），
+     * 直接跳转到对应的系统设置页，让用户手动操作。
+     */
+    fun openSettingsForType(context: Context, type: PermissionType) {
+        when (type) {
+            PermissionType.ACCESSIBILITY -> openAccessibilitySettings(context)
+            PermissionType.OVERLAY -> requestOverlayPermission(context)
+            PermissionType.STORAGE -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    requestStoragePermission(context)
+                } else {
+                    openAppPermissionSettings(context)
+                }
+            }
+            PermissionType.NOTIFICATION -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    openAppPermissionSettings(context)
+                }
+            }
+            PermissionType.BATTERY_OPTIMIZATION -> requestBatteryOptimization(context)
+            PermissionType.USAGE_STATS -> requestUsageStatsPermission(context)
+            PermissionType.SHIZUKU -> {
+                // 逐个设置：直接打开已安装的应用或引导安装，不做自动授权
+                val pkg = getInstalledShizukuApp(context)
+                if (pkg != null) {
+                    val intent = context.packageManager.getLaunchIntentForPackage(pkg)
+                    if (intent != null) {
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(intent)
+                    }
+                } else {
+                    openShizukuInstallGuide(context)
+                }
+            }
+            PermissionType.AUTO_START -> requestAutoStartPermission(context)
+            // 所有运行时权限 → 跳转到应用详情设置页，让用户手动开关
+            PermissionType.PHONE_STATE,
+            PermissionType.CAMERA,
+            PermissionType.LOCATION,
+            PermissionType.MICROPHONE,
+            PermissionType.CONTACTS,
+            PermissionType.CALENDAR,
+            PermissionType.SMS,
+            PermissionType.CALL_LOG -> openAppPermissionSettings(context)
+        }
+    }
+
+    /**
+     * 根据 [PermissionType] 跳转到对应的权限设置页（智能版，含自动尝试）。
      *
      * 行为说明：
-     * - 特殊权限（无障碍、悬浮窗、电池优化等）→ 跳转对应系统设置页
-     * - 运行时权限（相机、定位、麦克风等）→ 跳转本应用的应用详情页，用户可手动开关
+     * - 无障碍服务 → 优先尝试 Shizuku 一键开启，失败则跳转设置页
+     * - 其他特殊权限 → 跳转对应系统设置页
+     * - 运行时权限 → 跳转本应用的应用详情页，用户可手动开关
      * - 调试权限（Shizuku/STELLAR）→ 根据安装状态引导操作
      */
     fun requestPermission(context: Context, type: PermissionType) {
@@ -1341,7 +1410,7 @@ object PermissionManager {
         // 无障碍已开启？直接完成
         if (isAccessibilityEnabled(activity)) {
             AlertDialog.Builder(activity)
-                .setTitle("🎉 配置已完成")
+                .setTitle("配置已完成")
                 .setMessage("无障碍服务已开启，你可以直接使用灵爪了！\n\n" +
                         "输入指令即可控制手机，例如：\n" +
                         "• 「打开微信」\n" +
@@ -1352,41 +1421,43 @@ object PermissionManager {
             return
         }
 
-        // 检查 Shizuku 是否可用
+        // 检查 Shizuku 是否可用（轻量操作，不卡 UI）
         val shizukuAvailable = com.mobileclaw.app.shizuku.ShizukuManager.isShizukuAvailable()
 
         if (shizukuAvailable) {
             // Shizuku 已就绪 → 一键开启无障碍
             AlertDialog.Builder(activity)
-                .setTitle("⚡ 一键配置")
+                .setTitle("一键配置")
                 .setMessage("检测到 Shizuku/STELLAR 调试权限已就绪，可以一键开启无障碍服务，无需进入系统设置。\n\n" +
                         "点击「一键开启」即可完成配置。")
-                .setPositiveButton("🚀 一键开启") { _, _ ->
-                    enableAccessibilityViaShizuku(activity)
-                    // 延迟检测是否已连接
-                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                        if (isAccessibilityEnabled(activity)) {
-                            AlertDialog.Builder(activity)
-                                .setTitle("✅ 配置成功")
-                                .setMessage("无障碍服务已开启，你可以直接使用灵爪了！\n\n" +
-                                        "输入指令即可控制手机，例如：\n" +
-                                        "• 「打开微信」\n" +
-                                        "• 「截个屏」\n" +
-                                        "• 「帮我查天气」")
-                                .setPositiveButton("开始使用", null)
-                                .show()
-                        } else {
-                            AlertDialog.Builder(activity)
-                                .setTitle("⚠️ 一键开启失败")
-                                .setMessage("一键开启未能生效，这可能是因为系统限制。\n\n" +
-                                        "请点击「手动设置」前往系统设置页面手动开启无障碍服务。")
-                                .setPositiveButton("手动设置") { _, _ ->
-                                    requestAccessibilityPermission(activity)
-                                }
-                                .setNegativeButton("取消", null)
-                                .show()
+                .setPositiveButton("一键开启") { _, _ ->
+                    // 在后台线程执行 Shizuku 操作，避免阻塞 UI
+                    Thread {
+                        enableAccessibilityViaShizuku(activity)
+                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                            if (isAccessibilityEnabled(activity)) {
+                                AlertDialog.Builder(activity)
+                                    .setTitle("配置成功")
+                                    .setMessage("无障碍服务已开启，你可以直接使用灵爪了！\n\n" +
+                                            "输入指令即可控制手机，例如：\n" +
+                                            "• 「打开微信」\n" +
+                                            "• 「截个屏」\n" +
+                                            "• 「帮我查天气」")
+                                    .setPositiveButton("开始使用", null)
+                                    .show()
+                            } else {
+                                AlertDialog.Builder(activity)
+                                    .setTitle("一键开启失败")
+                                    .setMessage("一键开启未能生效，这可能是因为系统限制。\n\n" +
+                                            "请点击「手动设置」前往系统设置页面手动开启无障碍服务。")
+                                    .setPositiveButton("手动设置") { _, _ ->
+                                        requestAccessibilityPermission(activity)
+                                    }
+                                    .setNegativeButton("取消", null)
+                                    .show()
+                            }
                         }
-                    }, 1500)
+                    }.start()
                 }
                 .setNegativeButton("稍后再说", null)
                 .show()
@@ -1398,10 +1469,10 @@ object PermissionManager {
                 appendLine("灵爪需要无障碍服务来操控屏幕。")
                 appendLine()
                 if (!hasShizukuApp) {
-                    appendLine("💡 推荐安装 STELLAR（Shizuku 兼容版），安装后即可一键开启无障碍服务，无需手动操作。")
+                    appendLine("推荐安装 STELLAR（Shizuku 兼容版），安装后即可一键开启无障碍服务，无需手动操作。")
                     appendLine()
                 } else {
-                    appendLine("💡 检测到已安装 Shizuku/STELLAR，但服务尚未启动。请打开后启动服务，即可一键开启无障碍。")
+                    appendLine("检测到已安装 Shizuku/STELLAR，但服务尚未启动。请打开后启动服务，即可一键开启无障碍。")
                     appendLine()
                 }
                 append("或者直接前往系统设置手动开启无障碍服务。")

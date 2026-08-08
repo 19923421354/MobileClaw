@@ -619,8 +619,8 @@ class MainActivity : AppCompatActivity() {
                         }
                         .show()
                 } else {
-                    // 未授权 → 跳转到设置页
-                    PermissionManager.requestPermission(this, perm.type)
+                    // 未授权 → 直接跳转到系统设置页，让用户手动开关
+                    PermissionManager.openSettingsForType(this, perm.type)
                     showToast("正在打开「${perm.name}」设置…")
                 }
             }
