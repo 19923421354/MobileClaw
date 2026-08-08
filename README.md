@@ -44,7 +44,7 @@
 
 ### 安装
 
-1. 下载 [最新 APK](https://github.com/yourusername/MobileClaw/releases/latest)
+1. 下载 [最新 APK](https://github.com/19923421354/MobileClaw/releases/latest)
 2. 安装到设备
 3. 打开应用，点击「⚡ 一键快捷配置」开启无障碍服务
 
@@ -140,7 +140,7 @@ MobileClaw/
 
 ```bash
 # 克隆仓库
-git clone https://github.com/yourusername/MobileClaw.git
+git clone https://github.com/19923421354/MobileClaw.git
 
 # 使用 Gradle 构建
 cd MobileClaw
