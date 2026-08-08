@@ -45,7 +45,7 @@
                 android:id="@+id/profileVersion"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="v2.0.4 (build 28)"
+                android:text="v2.0.5 (build 29)"
                 android:textSize="13sp"
                 android:textColor="#CCFFFFFF"
                 android:layout_marginTop="4dp" />
@@ -146,7 +146,7 @@
                             android:id="@+id/profileStatsVersion"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="v2.0.4"
+                            android:text="v2.0.5"
                             android:textSize="24sp"
                             android:textStyle="bold"
                             android:textColor="@color/brand_primary" />

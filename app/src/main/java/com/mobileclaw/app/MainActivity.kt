@@ -134,7 +134,10 @@ class MainActivity : AppCompatActivity() {
                     "只需开启【无障碍服务】即可使用核心功能（点击/滑动/输入/截屏等）。\n\n" +
                     "⚡ 已支持一键配置！点击右下角「⚡」按钮，有 Shizuku/STELLAR 即可一键开启无障碍，无需手动设置。\n\n" +
                     "默认使用智谱 GLM-4.7-Flash（免费模型），在设置中可切换其他模型。\n\n" +
-                    "v2.0.4 更新 — 关于对话框 + 命令历史 + 下载通知 + 更多优化：\n" +
+                    "v2.0.5 更新 — 「我的」个人中心 + 应用内更新 + 赞助开发入口：\n" +
+                    "🔥 全新「我的」个人中心：赞助开发、统计卡片、功能入口一站式集成\n" +
+                    "🔥 应用内更新优化：API 失败自动回退直链下载，确保找到新版本\n" +
+                    "🔥 修复检查更新问题：配合 GitHub Release 发布，现在检查更新真正可用\n" +
                     "🔥 全新「关于」对话框：版本信息、功能一览、更新日志、GitHub链接\n" +
                     "🔥 命令历史记录：自动保存最近50条指令，点击即可快速复用\n" +
                     "🔥 通知栏下载进度：大文件更新时显示通知栏实时进度\n" +
@@ -1303,6 +1306,13 @@ class MainActivity : AppCompatActivity() {
      */
     private fun showChangelogDialog() {
         val changelog = """
+            |━━━ v2.0.5 ━━━
+            |• 新增「我的」个人中心页面，集成赞助开发、统计卡片、功能入口
+            |• 顶部状态栏新增「我的」入口按钮（👤 图标）
+            |• 优化应用内更新：GitHub API 失败时自动回退直链下载
+            |• 更新对话框明确标注「应用内更新」，无需跳转网页
+            |• 修复检查更新不生效的问题（需配合 GitHub Release 发布）
+            |
             |━━━ v2.0.4 ━━━
             |• 新增「关于」对话框，集成版本信息与功能导航
             |• 新增命令历史记录，快速重复常用指令
@@ -1465,15 +1475,51 @@ class MainActivity : AppCompatActivity() {
             .setCancelable(false)
             .show()
         lifecycleScope.launch {
-            val info = UpdateChecker.checkForUpdate(appVersion)
-            dialog.dismiss()
-            if (info != null) {
-                updateInfoCached = info
-                showUpdateDialog(info, autoDetected = false)
-            } else {
+            try {
+                val info = UpdateChecker.checkForUpdate(appVersion)
+                dialog.dismiss()
+                if (info != null) {
+                    updateInfoCached = info
+                    showUpdateDialog(info, autoDetected = false)
+                } else {
+                    // 区别对待：检查网络连通性
+                    val networkOk = try {
+                        val url = java.net.URL("https://api.github.com")
+                        val conn = url.openConnection() as java.net.HttpURLConnection
+                        conn.connectTimeout = 3000
+                        conn.readTimeout = 3000
+                        conn.responseCode in 200..499
+                    } catch (_: Exception) { false }
+
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("检查更新")
+                        .setMessage(if (networkOk) {
+                            "当前已是最新版本（v$appVersion），无需更新。\n\n如有新版本发布，会自动在应用内检测到并下载安装，无需跳转网页。"
+                        } else {
+                            "检查更新失败：无法连接到 GitHub 服务器。\n\n" +
+                            "请检查网络连接后重试。\n\n" +
+                            "你也可以前往 GitHub 查看最新版本：\n" +
+                            "github.com/19923421354/MobileClaw/releases"
+                        })
+                        .setPositiveButton(if (networkOk) "好的" else "打开浏览器") { _, _ ->
+                            if (!networkOk) {
+                                try {
+                                    startActivity(android.content.Intent(
+                                        android.content.Intent.ACTION_VIEW,
+                                        android.net.Uri.parse("https://github.com/19923421354/MobileClaw/releases")
+                                    ))
+                                } catch (_: Exception) { showToast("无法打开浏览器") }
+                            }
+                        }
+                        .setNegativeButton("关闭", null)
+                        .show()
+                }
+            } catch (e: Exception) {
+                dialog.dismiss()
                 AlertDialog.Builder(this@MainActivity)
-                    .setTitle("检查更新")
-                    .setMessage("当前已是最新版本（v$appVersion），无需更新。\n\n如有新版本，会自动在应用内下载并安装，无需跳转网页。")
+                    .setTitle("检查更新失败")
+                    .setMessage("发生错误：${e.message?.take(100) ?: "未知错误"}\n\n" +
+                            "请检查网络连接后重试。")
                     .setPositiveButton("好的", null)
                     .show()
             }
