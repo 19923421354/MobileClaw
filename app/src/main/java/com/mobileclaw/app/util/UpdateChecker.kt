@@ -34,9 +34,13 @@ object UpdateChecker {
     /** GitHub 仓库名 */
     private const val GITHUB_REPO = "MobileClaw"
 
-    /** 1. jsDelivr CDN 镜像（国内可访问，优先使用） */
+    /** 1. 直连 GitHub Raw（权威源，无 CDN 缓存延迟问题） */
+    private const val RAW_VERSION_URL =
+        "https://raw.githubusercontent.com/$GITHUB_OWNER/$GITHUB_REPO/main/version.json"
+
+    /** 备用: jsDelivr CDN 镜像（国内可访问，但可能有缓存延迟） */
     private const val CDN_VERSION_URL =
-        "https://cdn.jsdelivr.net/gh/$GITHUB_OWNER/$GITHUB_REPO@latest/version.json"
+        "https://cdn.jsdelivr.net/gh/$GITHUB_OWNER/$GITHUB_REPO@main/version.json"
 
     /** 2. GitHub Releases API 地址 */
     private const val RELEASES_API_URL =
@@ -117,13 +121,14 @@ object UpdateChecker {
      */
     suspend fun checkForUpdate(currentVersion: String): UpdateInfo? = withContext(Dispatchers.IO) {
         // 尝试所有源，按优先级顺序
-        val result = tryCdnMirror(currentVersion)
-            ?: tryGitHubApi(currentVersion)
-            ?: tryGiteeApi(currentVersion)
-            ?: tryFallbackCheck(currentVersion)
+        val result = tryRawGitHub(currentVersion)   // 1. 直连 GitHub Raw（最快最新，但国内可能被墙）
+            ?: tryGitHubApi(currentVersion)          // 2. GitHub API（官方源，权威）
+            ?: tryCdnMirror(currentVersion)          // 3. jsDelivr CDN（国内加速，但有缓存延迟）
+            ?: tryGiteeApi(currentVersion)           // 4. Gitee API（国内备用）
+            ?: tryFallbackCheck(currentVersion)      // 5. 直链 HEAD 探测（最终回退）
 
         if (result != null) {
-            Log.d(TAG, "检查更新完成，版本: ${result.latestVersion}")
+            Log.d(TAG, "检查更新完成，发现新版本: ${result.latestVersion}")
         } else {
             Log.d(TAG, "检查更新完成，无新版本或所有源均不可达")
         }
@@ -133,9 +138,69 @@ object UpdateChecker {
     // ========== 各源实现 ==========
 
     /**
-     * 1. jsDelivr CDN 镜像检查。
-     * 通过读取仓库根目录的 version.json 获取最新版本信息。
-     * CDN 在国内可访问，速度快，推荐用于国内用户。
+     * 1. 直连 GitHub Raw 读取 version.json（权威源，无缓存延迟）。
+     * 直接读取仓库根目录的 version.json，实时获取最新版本信息。
+     * 注意：raw.githubusercontent.com 在国内可能被墙，所以后面还有备用源。
+     */
+    private suspend fun tryRawGitHub(currentVersion: String): UpdateInfo? = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "尝试直连 GitHub Raw: $RAW_VERSION_URL")
+            val client = OkHttpClient.Builder()
+                .connectTimeout(CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                .readTimeout(CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                .build()
+
+            val request = Request.Builder()
+                .url(RAW_VERSION_URL)
+                .header("User-Agent", "MobileClaw")
+                .build()
+
+            val response = client.newCall(request).execute()
+            if (!response.isSuccessful) {
+                Log.w(TAG, "GitHub Raw 返回 ${response.code}，尝试下一源")
+                response.close()
+                return@withContext null
+            }
+
+            val body = response.body?.string() ?: run {
+                response.close()
+                return@withContext null
+            }
+            response.close()
+
+            val json = Json { ignoreUnknownKeys = true }
+            val versionInfo = json.decodeFromString<CdnVersionInfo>(body)
+
+            val tagVersion = versionInfo.version.removePrefix("v").removePrefix("V")
+            if (compareVersions(tagVersion, currentVersion) <= 0) {
+                Log.d(TAG, "GitHub Raw: 当前版本 $currentVersion 已是最新 (latest: $tagVersion)")
+                return@withContext null
+            }
+
+            // 构建下载链接
+            val downloadUrl = "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/v$tagVersion/MobileClaw-v$tagVersion.apk"
+
+            UpdateInfo(
+                latestVersion = tagVersion,
+                downloadUrl = downloadUrl,
+                apkName = "MobileClaw-v$tagVersion.apk",
+                apkSize = 0L,
+                changelog = versionInfo.changelog ?: "请查看 GitHub Releases 获取完整更新日志。",
+                releaseUrl = versionInfo.releaseUrl
+                    ?: "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/tag/v$tagVersion",
+                publishedAt = ""
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "GitHub Raw 检查失败", e)
+            null
+        }
+    }
+
+    /**
+     * 2. jsDelivr CDN 镜像检查（备用源）。
+     * 通过 CDN 读取仓库根目录的 version.json 获取最新版本信息。
+     * CDN 在国内可访问，但有缓存延迟（最长数小时）。
+     * 改用 @main 分支代替 @latest，减少缓存不一致问题。
      */
     private suspend fun tryCdnMirror(currentVersion: String): UpdateInfo? = withContext(Dispatchers.IO) {
         try {
@@ -192,7 +257,7 @@ object UpdateChecker {
     }
 
     /**
-     * 2. GitHub Releases API 检查。
+     * 3. GitHub Releases API 检查。
      * 官方源，在海外或有梯子的环境下可用。
      */
     private suspend fun tryGitHubApi(currentVersion: String): UpdateInfo? = withContext(Dispatchers.IO) {
@@ -252,7 +317,7 @@ object UpdateChecker {
     }
 
     /**
-     * 3. Gitee API 检查（国内备用）。
+     * 4. Gitee API 检查（国内备用）。
      * 通过 Gitee Releases API 获取最新版本信息。
      */
     private suspend fun tryGiteeApi(currentVersion: String): UpdateInfo? = withContext(Dispatchers.IO) {
@@ -308,7 +373,7 @@ object UpdateChecker {
     }
 
     /**
-     * 4. 直链 HEAD 探测（最终回退）。
+     * 5. 直链 HEAD 探测（最终回退）。
      * 直接尝试访问预期的最新版本 APK 下载链接。
      * 如果服务器返回 200 则说明该版本存在。
      */
