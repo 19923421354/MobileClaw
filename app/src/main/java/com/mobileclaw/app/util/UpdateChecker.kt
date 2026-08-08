@@ -48,9 +48,13 @@ object UpdateChecker {
     }
 
     /**
-     * 检查是否有新版本。
+     * 检查是否有新版本（带 Fallback 机制）。
      *
-     * @param currentVersion 当前版本号（如 "2.0.2"）
+     * 优先通过 GitHub Releases API 获取最新版本信息。
+     * 如果 API 调用失败（如网络问题、API 限流），
+     * 自动回退到通过直接构造 URL 的方式下载 APK。
+     *
+     * @param currentVersion 当前版本号（如 "2.0.4"）
      * @return [UpdateInfo] 有新版本时返回；无更新或失败时返回 null
      */
     suspend fun checkForUpdate(currentVersion: String): UpdateInfo? = withContext(Dispatchers.IO) {
@@ -67,11 +71,12 @@ object UpdateChecker {
 
             val response = client.newCall(request).execute()
             if (!response.isSuccessful) {
-                Log.w(TAG, "GitHub API returned ${response.code}")
-                return@withContext null
+                Log.w(TAG, "GitHub API returned ${response.code}, trying fallback...")
+                // API 失败时尝试直接构造下载链接
+                return@withContext tryFallbackCheck(currentVersion)
             }
 
-            val body = response.body?.string() ?: return@withContext null
+            val body = response.body?.string() ?: return@withContext tryFallbackCheck(currentVersion)
             val json = Json { ignoreUnknownKeys = true }
             val release = json.decodeFromString<GitHubRelease>(body)
 
@@ -84,9 +89,13 @@ object UpdateChecker {
             // 找第一个 APK 附件
             val apkAsset = release.assets.firstOrNull { it.name.endsWith(".apk") }
 
+            // 构建直接下载链接：如果有 APK 附件用附件链接，否则构造标准下载链接
+            val downloadUrl = apkAsset?.browserDownloadUrl
+                ?: "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/v$tagVersion/MobileClaw-$tagVersion.apk"
+
             UpdateInfo(
                 latestVersion = tagVersion,
-                downloadUrl = apkAsset?.browserDownloadUrl ?: release.htmlUrl,
+                downloadUrl = downloadUrl,
                 apkName = apkAsset?.name ?: "MobileClaw-$tagVersion.apk",
                 apkSize = apkAsset?.size ?: 0L,
                 changelog = release.body ?: "暂无更新日志",
@@ -94,7 +103,62 @@ object UpdateChecker {
                 publishedAt = release.publishedAt ?: ""
             )
         } catch (e: Exception) {
-            Log.e(TAG, "checkForUpdate failed", e)
+            Log.e(TAG, "checkForUpdate failed, trying fallback...", e)
+            // 异常时尝试 fallback 检查
+            tryFallbackCheck(currentVersion)
+        }
+    }
+
+    /**
+     * 回退检查：在不依赖 GitHub API 的情况下，
+     * 直接尝试访问预期的最新版本 APK 下载链接。
+     *
+     * 此方法通过构造标准 URL 模式来工作，
+     * 如果服务器返回 200 则说明该版本存在。
+     * 注意：此方法无法获取更新日志，仅能判断版本是否存在。
+     */
+    private suspend fun tryFallbackCheck(currentVersion: String): UpdateInfo? = withContext(Dispatchers.IO) {
+        try {
+            // 尝试检查下一个版本号是否存在（递增补丁版本号）
+            val parts = currentVersion.split(".").map { it.toIntOrNull() ?: 0 }
+            val nextPatch = if (parts.size >= 3) {
+                "${parts[0]}.${parts[1]}.${parts[2] + 1}"
+            } else {
+                "${currentVersion}.1"
+            }
+
+            // 尝试 HEAD 请求检查 APK 是否存在
+            val testUrl = "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/v$nextPatch/MobileClaw-$nextPatch.apk"
+            val client = OkHttpClient.Builder()
+                .connectTimeout(5, TimeUnit.SECONDS)
+                .readTimeout(5, TimeUnit.SECONDS)
+                .followRedirects(false)
+                .build()
+            val headRequest = Request.Builder()
+                .url(testUrl)
+                .head()
+                .build()
+            val headResponse = client.newCall(headRequest).execute()
+            val exists = headResponse.code in 200..302
+            headResponse.close()
+
+            if (exists) {
+                Log.d(TAG, "Fallback: found v$nextPatch via direct URL")
+                UpdateInfo(
+                    latestVersion = nextPatch,
+                    downloadUrl = testUrl,
+                    apkName = "MobileClaw-$nextPatch.apk",
+                    apkSize = 0L,
+                    changelog = "检测到新版本 v$nextPatch（自动检测）\n请前往 GitHub Releases 查看完整更新日志。",
+                    releaseUrl = "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/tag/v$nextPatch",
+                    publishedAt = ""
+                )
+            } else {
+                Log.d(TAG, "Fallback: no newer version found (v$nextPatch not available)")
+                null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Fallback check failed", e)
             null
         }
     }

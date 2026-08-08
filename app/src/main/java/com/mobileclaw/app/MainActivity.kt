@@ -134,7 +134,7 @@ class MainActivity : AppCompatActivity() {
                     "只需开启【无障碍服务】即可使用核心功能（点击/滑动/输入/截屏等）。\n\n" +
                     "⚡ 已支持一键配置！点击右下角「⚡」按钮，有 Shizuku/STELLAR 即可一键开启无障碍，无需手动设置。\n\n" +
                     "默认使用智谱 GLM-4.7-Flash（免费模型），在设置中可切换其他模型。\n\n" +
-                    "v2.1.0 更新 — 关于对话框 + 命令历史 + 下载通知 + 更多优化：\n" +
+                    "v2.0.4 更新 — 关于对话框 + 命令历史 + 下载通知 + 更多优化：\n" +
                     "🔥 全新「关于」对话框：版本信息、功能一览、更新日志、GitHub链接\n" +
                     "🔥 命令历史记录：自动保存最近50条指令，点击即可快速复用\n" +
                     "🔥 通知栏下载进度：大文件更新时显示通知栏实时进度\n" +
@@ -208,6 +208,11 @@ class MainActivity : AppCompatActivity() {
         // 发送按钮
         binding.btnSend.setOnClickListener {
             sendMessage()
+        }
+
+        // 个人中心按钮
+        binding.btnProfile.setOnClickListener {
+            showProfileDialog()
         }
 
         // 设置按钮
@@ -1298,7 +1303,7 @@ class MainActivity : AppCompatActivity() {
      */
     private fun showChangelogDialog() {
         val changelog = """
-            |━━━ v2.1.0 ━━━
+            |━━━ v2.0.4 ━━━
             |• 新增「关于」对话框，集成版本信息与功能导航
             |• 新增命令历史记录，快速重复常用指令
             |• 通知栏下载进度显示，大文件更新更直观
@@ -1442,6 +1447,7 @@ class MainActivity : AppCompatActivity() {
     /**
      * 手动检查更新。
      * 显示加载状态，无论有无更新都给出明确反馈。
+     * 更新直接通过应用内下载安装，无需跳转网页。
      */
     private fun checkForUpdatesManual() {
         // 使用现代化进度对话框
@@ -1454,7 +1460,7 @@ class MainActivity : AppCompatActivity() {
         }
         val dialog = AlertDialog.Builder(this)
             .setTitle("检查更新")
-            .setMessage("正在检查新版本…")
+            .setMessage("正在检查新版本…\n（通过 GitHub Releases 直接下载，无需跳转网页）")
             .setView(progressView)
             .setCancelable(false)
             .show()
@@ -1467,7 +1473,7 @@ class MainActivity : AppCompatActivity() {
             } else {
                 AlertDialog.Builder(this@MainActivity)
                     .setTitle("检查更新")
-                    .setMessage("当前已是最新版本（v$appVersion），无需更新。")
+                    .setMessage("当前已是最新版本（v$appVersion），无需更新。\n\n如有新版本，会自动在应用内下载并安装，无需跳转网页。")
                     .setPositiveButton("好的", null)
                     .show()
             }
@@ -1483,6 +1489,8 @@ class MainActivity : AppCompatActivity() {
     private fun showUpdateDialog(info: UpdateInfo, autoDetected: Boolean) {
         val changelog = if (info.changelog.isBlank()) "暂无更新日志" else info.changelog
         val sizeInfo = if (info.apkSize > 0) "（${info.formattedSize()}）" else ""
+        val isDirectApk = info.downloadUrl.endsWith(".apk")
+        val downloadLabel = if (isDirectApk) "📥 应用内更新 $sizeInfo" else "📥 下载更新 $sizeInfo"
 
         AlertDialog.Builder(this)
             .setTitle("发现新版本 v${info.latestVersion}")
@@ -1490,9 +1498,9 @@ class MainActivity : AppCompatActivity() {
                 "当前版本：v$appVersion\n" +
                 "最新版本：v${info.latestVersion}\n" +
                 "发布时间：${info.publishedAt.take(10)}\n\n" +
-                "更新日志：\n$changelog"
+                "━━━ 更新日志 ━━━\n$changelog"
             )
-            .setPositiveButton("下载更新 $sizeInfo") { _, _ ->
+            .setPositiveButton(downloadLabel) { _, _ ->
                 downloadAndInstallUpdate(info)
             }
             .setNeutralButton("以后再说") { _, _ ->
@@ -1610,6 +1618,132 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    // =========================================================================
+    //  个人中心
+    // =========================================================================
+
+    /**
+     * 显示「我的」个人中心对话框。
+     *
+     * 集成个人资料、赞助开发、检查更新、更新日志、开源仓库、统计面板等入口。
+     * 使用 [dialog_profile] 布局，动态加载二维码图片。
+     */
+    private fun showProfileDialog() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_profile, null)
+        val versionName = BuildConfig.VERSION_NAME
+        val versionCode = BuildConfig.VERSION_CODE
+
+        // 设置版本信息
+        dialogView.findViewById<android.widget.TextView>(R.id.profileVersion).text = "v$versionName (build $versionCode)"
+        dialogView.findViewById<android.widget.TextView>(R.id.profileStatsVersion).text = "v$versionName"
+
+        // 设置权限统计
+        val permissions = PermissionManager.getAllPermissions(this)
+        val grantedCount = permissions.count { it.granted }
+        dialogView.findViewById<android.widget.TextView>(R.id.profileStatsPermissions).text = "$grantedCount/${permissions.size}"
+
+        // 设置指令统计
+        val historyCount = getCommandHistory().size
+        dialogView.findViewById<android.widget.TextView>(R.id.profileStatsCommands).text = "$historyCount"
+
+        // ========== 加载二维码 ==========
+        val displayMetrics = resources.displayMetrics
+        val qrSize = (displayMetrics.widthPixels * 0.45).toInt()
+        val qrImage = dialogView.findViewById<android.widget.ImageView>(R.id.profileQrImage)
+        qrImage.layoutParams = android.widget.FrameLayout.LayoutParams(qrSize, qrSize)
+
+        val wechatBitmap = try {
+            val `is` = assets.open("wechat_qr.png")
+            val bm = android.graphics.BitmapFactory.decodeStream(`is`)
+            `is`.close(); bm
+        } catch (_: Exception) { null }
+
+        val alipayBitmap = try {
+            val `is` = assets.open("alipay_qr.jpg")
+            val bm = android.graphics.BitmapFactory.decodeStream(`is`)
+            `is`.close(); bm
+        } catch (_: Exception) { null }
+
+        val hasWechat = wechatBitmap != null
+        val hasAlipay = alipayBitmap != null
+
+        // 默认显示微信二维码
+        if (hasWechat) qrImage.setImageBitmap(wechatBitmap)
+        else if (hasAlipay) qrImage.setImageBitmap(alipayBitmap)
+        else qrImage.visibility = android.view.View.GONE
+
+        // 支付方式切换按钮
+        val btnWechat = dialogView.findViewById<android.widget.Button>(R.id.profileBtnWechat)
+        val btnAlipay = dialogView.findViewById<android.widget.Button>(R.id.profileBtnAlipay)
+        if (!hasWechat) btnWechat.visibility = android.view.View.GONE
+        if (!hasAlipay) btnAlipay.visibility = android.view.View.GONE
+
+        btnWechat.setOnClickListener {
+            if (hasWechat) {
+                qrImage.setImageBitmap(wechatBitmap)
+                btnWechat.alpha = 1f
+                btnAlipay.alpha = 0.6f
+            }
+        }
+        btnAlipay.setOnClickListener {
+            if (hasAlipay) {
+                qrImage.setImageBitmap(alipayBitmap)
+                btnAlipay.alpha = 1f
+                btnWechat.alpha = 0.6f
+            }
+        }
+        // 默认微信高亮
+        if (hasWechat) { btnWechat.alpha = 1f; btnAlipay.alpha = 0.6f }
+
+        // 点击赞助卡片也可以打开赞助对话框
+        dialogView.findViewById<android.view.View>(R.id.cardSponsor).setOnClickListener {
+            showSponsorDialog()
+        }
+
+        // ========== 功能按钮 ==========
+        // 检查更新
+        dialogView.findViewById<android.view.View>(R.id.profileBtnCheckUpdate).setOnClickListener {
+            val statusText = dialogView.findViewById<android.widget.TextView>(R.id.profileUpdateStatus)
+            statusText.text = "检查中…"
+            checkForUpdatesManual()
+            handler.postDelayed({ statusText.text = "点击检查" }, 5000)
+        }
+
+        // 更新日志
+        dialogView.findViewById<android.view.View>(R.id.profileBtnChangelog).setOnClickListener {
+            showChangelogDialog()
+        }
+
+        // 开源仓库
+        dialogView.findViewById<android.view.View>(R.id.profileBtnGitHub).setOnClickListener {
+            try {
+                val intent = android.content.Intent(
+                    android.content.Intent.ACTION_VIEW,
+                    android.net.Uri.parse("https://github.com/19923421354/MobileClaw")
+                )
+                startActivity(intent)
+            } catch (_: Exception) {
+                showToast("无法打开浏览器")
+            }
+        }
+
+        // 统计面板
+        dialogView.findViewById<android.view.View>(R.id.profileBtnStats).setOnClickListener {
+            showStatsDialog()
+        }
+
+        // 设置
+        dialogView.findViewById<android.view.View>(R.id.profileBtnSettings).setOnClickListener {
+            showSettingsDialog()
+        }
+
+        // 显示对话框
+        AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setCancelable(true)
+            .show()
     }
 
     // =========================================================================

@@ -512,7 +512,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="灵爪 v2.1.0 (build 28)"
+            android:text="灵爪 v2.0.4 (build 28)"
             android:textSize="12sp"
             android:textColor="@color/text_secondary"
             android:gravity="center"

@@ -56,6 +56,15 @@
                     android:ellipsize="end" />
 
                 <ImageButton
+                    android:id="@+id/btnProfile"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:src="@drawable/ic_action_profile"
+                    android:tint="@color/brand_secondary"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="我的" />
+
+                <ImageButton
                     android:id="@+id/btnSettings"
                     android:layout_width="36dp"
                     android:layout_height="36dp"
