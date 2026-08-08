@@ -144,15 +144,20 @@ object UpdateChecker {
      */
     private suspend fun tryRawGitHub(currentVersion: String): UpdateInfo? = withContext(Dispatchers.IO) {
         try {
-            Log.d(TAG, "尝试直连 GitHub Raw: $RAW_VERSION_URL")
+            // 添加随机查询参数绕过 CDN 缓存（raw.githubusercontent.com CDN 缓存延迟可能长达数小时）
+            val cacheBusterUrl = "$RAW_VERSION_URL?t=${System.currentTimeMillis()}"
+            Log.d(TAG, "尝试直连 GitHub Raw (缓存破坏): $cacheBusterUrl")
             val client = OkHttpClient.Builder()
                 .connectTimeout(CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
                 .readTimeout(CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
                 .build()
 
             val request = Request.Builder()
-                .url(RAW_VERSION_URL)
-                .header("User-Agent", "MobileClaw")
+                .url(cacheBusterUrl)
+                .header("User-Agent", "MobileClaw/2.3.0")
+                .header("Cache-Control", "no-cache, no-store, must-revalidate")
+                .header("Pragma", "no-cache")
+                .header("Expires", "0")
                 .build()
 
             val response = client.newCall(request).execute()
@@ -204,15 +209,20 @@ object UpdateChecker {
      */
     private suspend fun tryCdnMirror(currentVersion: String): UpdateInfo? = withContext(Dispatchers.IO) {
         try {
-            Log.d(TAG, "尝试 jsDelivr CDN 镜像: $CDN_VERSION_URL")
+            // 添加随机查询参数绕过 jsDelivr CDN 缓存
+            val cacheBusterUrl = "$CDN_VERSION_URL?t=${System.currentTimeMillis()}"
+            Log.d(TAG, "尝试 jsDelivr CDN 镜像 (缓存破坏): $cacheBusterUrl")
             val client = OkHttpClient.Builder()
                 .connectTimeout(CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
                 .readTimeout(CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
                 .build()
 
             val request = Request.Builder()
-                .url(CDN_VERSION_URL)
-                .header("User-Agent", "MobileClaw")
+                .url(cacheBusterUrl)
+                .header("User-Agent", "MobileClaw/2.3.0")
+                .header("Cache-Control", "no-cache, no-store, must-revalidate")
+                .header("Pragma", "no-cache")
+                .header("Expires", "0")
                 .build()
 
             val response = client.newCall(request).execute()
@@ -529,7 +539,7 @@ object UpdateChecker {
                 try {
                     val request = Request.Builder()
                         .url(mirrorUrl)
-                        .header("User-Agent", "MobileClaw/2.2.0")
+                        .header("User-Agent", "MobileClaw/2.3.0")
                         .header("Accept", "application/octet-stream")
                         .build()
 

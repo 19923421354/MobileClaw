@@ -1,6 +1,6 @@
 {
-  "version": "2.2.0",
-  "versionCode": 35,
-  "releaseUrl": "https://github.com/19923421354/MobileClaw/releases/tag/v2.2.0",
-  "changelog": "🔥 v2.2.0 更新内容：\n\n🎨 全新应用图标 v2：\n1. 🎯 机械灵爪抓取手机 + AI神经网络屏幕，直接彰显MobileClaw（Mobile+Claw）名称特征\n2. 💬 AI智能移动助手视觉语言，深空蓝紫渐变背景，科技感拉满\n\n🚀 下载引擎全面重写：\n3. 无预测试：不再对每个镜像发HEAD请求测速，直接下载，节省15+秒\n4. 实时网速每500ms精确采样，首次回调立即显示\n5. 安装自动处理 Android 8+ 未知来源权限，FileProvider 失败自动备用安装\n\n🔧 修复：\n6. 修复检查更新：CDN 缓存延迟导致 version.json 获取旧版本，升级到v2.2.0强制刷新\n7. 修复APK下载链接文件名不匹配问题（v前缀缺失）\n8. 修复应用图标，改为彰显应用特征的机抓灵爪抓取手机设计"
+  "version": "2.3.0",
+  "versionCode": 36,
+  "releaseUrl": "https://github.com/19923421354/MobileClaw/releases/tag/v2.3.0",
+  "changelog": "🔥 v2.3.0 更新内容：\n\n🚀 修复检查更新核心问题：\n1. 🔧 修复 raw.githubusercontent.com CDN 缓存导致 version.json 返回旧版本问题\n2. 🔧 检查更新请求添加 Cache-Control: no-cache 头 + 随机缓存破坏参数，强制获取最新版本\n3. 🔧 版本号升级到 v2.3.0 强制刷新所有 CDN 节点缓存\n\n🎨 全新应用图标 v2（延续）：\n4. 🎯 机械灵爪抓取手机 + AI神经网络屏幕，直接彰显MobileClaw（Mobile+Claw）名称特征\n5. 💬 AI智能移动助手视觉语言，深空蓝紫渐变背景，科技感拉满\n\n🚀 下载引擎全面重写（延续）：\n6. 无预测试：不再对每个镜像发HEAD请求测速，直接下载，节省15+秒\n7. 实时网速每500ms精确采样，首次回调立即显示\n8. 安装自动处理 Android 8+ 未知来源权限，FileProvider 失败自动备用安装\n\n---\n开源协议: Apache 2.0 | 完全开源 | 仓库: https://github.com/19923421354/MobileClaw"
 }
