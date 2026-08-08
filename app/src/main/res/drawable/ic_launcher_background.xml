@@ -1,11 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 自适应图标背景：渐变紫到蓝，非纯色，富有层次感 -->
+<!--
+  自适应图标背景：深空蓝紫渐变，富有科技感与层次感
+  从深邃星空蓝过渡到亮紫，营造 AI 智能的深邃感
+-->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
     <gradient
-        android:startColor="#FF1E1B4B"
-        android:centerColor="#FF312E81"
+        android:startColor="#FF0F0A2E"
+        android:centerColor="#FF2D1B69"
         android:endColor="#FF1E40AF"
         android:angle="135"
         android:type="linear" />
+    <corners android:radius="24dp" />
 </shape>
