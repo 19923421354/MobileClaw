@@ -529,7 +529,7 @@ object UpdateChecker {
                 try {
                     val request = Request.Builder()
                         .url(mirrorUrl)
-                        .header("User-Agent", "MobileClaw/2.1.0")
+                        .header("User-Agent", "MobileClaw/2.2.0")
                         .header("Accept", "application/octet-stream")
                         .build()
 
