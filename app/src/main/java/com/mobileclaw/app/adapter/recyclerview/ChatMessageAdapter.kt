@@ -3,9 +3,13 @@ package com.mobileclaw.app.adapter.recyclerview
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.mobileclaw.app.R
 import com.mobileclaw.app.databinding.ItemChatBinding
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * 聊天消息数据模型。
@@ -24,10 +28,13 @@ data class ChatMessage(
 
 /**
  * 聊天消息列表适配器。
+ *
+ * v2.1.0 优化：使用新的气泡背景 Drawable + 时间戳显示 + 更流畅的动画效果。
  */
 class ChatMessageAdapter : RecyclerView.Adapter<ChatMessageAdapter.ViewHolder>() {
 
     private val messages = mutableListOf<ChatMessage>()
+    private val timeFormatter = SimpleDateFormat("HH:mm", Locale.getDefault())
 
     fun addMessage(msg: ChatMessage) {
         messages.add(msg)
@@ -61,28 +68,39 @@ class ChatMessageAdapter : RecyclerView.Adapter<ChatMessageAdapter.ViewHolder>()
 
     class ViewHolder(private val binding: ItemChatBinding) : RecyclerView.ViewHolder(binding.root) {
         fun bind(msg: ChatMessage) {
-            binding.txtContent.text = msg.content
             val ctx = binding.root.context
+
+            binding.txtContent.text = msg.content
+
             if (msg.type == ChatMessage.TYPE_USER) {
-                // 用户消息：右对齐，品牌蓝背景
+                // 用户消息：右对齐，品牌蓝渐变气泡
                 binding.layoutMessage.gravity = android.view.Gravity.END
-                binding.cardMessage.setCardBackgroundColor(
-                    ctx.getColor(com.mobileclaw.app.R.color.brand_primary)
-                )
+                binding.txtContent.setBackgroundResource(R.drawable.bg_chat_bubble_user)
                 binding.txtContent.setTextColor(
-                    ctx.getColor(android.R.color.white)
+                    ContextCompat.getColor(ctx, android.R.color.white)
                 )
             } else {
-                // AI 消息：左对齐，白色卡片背景
+                // AI 消息：左对齐，白色气泡 + 浅灰边框
                 binding.layoutMessage.gravity = android.view.Gravity.START
-                binding.cardMessage.setCardBackgroundColor(
-                    ctx.getColor(com.mobileclaw.app.R.color.surface_white)
-                )
+                binding.txtContent.setBackgroundResource(R.drawable.bg_chat_bubble_ai)
                 binding.txtContent.setTextColor(
-                    ctx.getColor(android.R.color.black)
+                    ContextCompat.getColor(ctx, R.color.text_primary)
                 )
             }
-            binding.txtContent.visibility = View.VISIBLE
+
+            // 时间戳
+            val timeStr = formatTime(msg.timestamp)
+            binding.txtTimestamp.text = timeStr
+            binding.txtTimestamp.visibility = View.VISIBLE
+        }
+
+        private fun formatTime(timestamp: Long): String {
+            return try {
+                val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
+                sdf.format(Date(timestamp))
+            } catch (e: Exception) {
+                ""
+            }
         }
     }
 }

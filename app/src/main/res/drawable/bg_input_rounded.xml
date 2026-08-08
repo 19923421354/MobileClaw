@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 输入框背景：浅灰 + 圆角 + 内部 + 聚焦边框效果 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#FFF0F2F5" />
+    <corners android:radius="24dp" />
+    <padding android:left="16dp" android:right="16dp" android:top="12dp" android:bottom="12dp" />
+</shape>

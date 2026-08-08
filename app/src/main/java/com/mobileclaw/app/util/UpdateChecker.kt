@@ -172,13 +172,13 @@ object UpdateChecker {
                 return@withContext null
             }
 
-            // 构建下载链接
-            val downloadUrl = "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/v$tagVersion/MobileClaw-$tagVersion.apk"
+            // 构建下载链接（注意：GitHub Release 的 APK 文件名带 v 前缀）
+            val downloadUrl = "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/v$tagVersion/MobileClaw-v$tagVersion.apk"
 
             UpdateInfo(
                 latestVersion = tagVersion,
                 downloadUrl = downloadUrl,
-                apkName = "MobileClaw-$tagVersion.apk",
+                apkName = "MobileClaw-v$tagVersion.apk",
                 apkSize = 0L,
                 changelog = versionInfo.changelog ?: "请查看 GitHub Releases 获取完整更新日志。",
                 releaseUrl = versionInfo.releaseUrl
@@ -290,7 +290,7 @@ object UpdateChecker {
                 return@withContext null
             }
 
-            val downloadUrl = "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/v$tagVersion/MobileClaw-$tagVersion.apk"
+            val downloadUrl = "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/v$tagVersion/MobileClaw-v$tagVersion.apk"
 
             UpdateInfo(
                 latestVersion = tagVersion,
@@ -323,7 +323,7 @@ object UpdateChecker {
             }
 
             // 尝试 HEAD 请求检查 APK 是否存在
-            val testUrl = "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/v$nextPatch/MobileClaw-$nextPatch.apk"
+            val testUrl = "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/v$nextPatch/MobileClaw-v$nextPatch.apk"
             val client = OkHttpClient.Builder()
                 .connectTimeout(5, TimeUnit.SECONDS)
                 .readTimeout(5, TimeUnit.SECONDS)
@@ -342,7 +342,7 @@ object UpdateChecker {
                 UpdateInfo(
                     latestVersion = nextPatch,
                     downloadUrl = testUrl,
-                    apkName = "MobileClaw-$nextPatch.apk",
+                    apkName = "MobileClaw-v$nextPatch.apk",
                     apkSize = 0L,
                     changelog = "检测到新版本 v$nextPatch（自动检测）\n请前往 GitHub Releases 查看完整更新日志。",
                     releaseUrl = "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/tag/v$nextPatch",

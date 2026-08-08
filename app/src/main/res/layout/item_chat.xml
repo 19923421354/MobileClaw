@@ -3,34 +3,38 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:paddingHorizontal="8dp"
-    android:paddingVertical="5dp">
+    android:paddingHorizontal="10dp"
+    android:paddingVertical="4dp">
 
+    <!-- 用户消息容器（右对齐） -->
     <LinearLayout
         android:id="@+id/layoutMessage"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:maxWidth="300dp">
+        android:maxWidth="300dp"
+        android:orientation="vertical">
 
-        <androidx.cardview.widget.CardView
-            android:id="@+id/cardMessage"
+        <!-- 消息气泡 -->
+        <TextView
+            android:id="@+id/txtContent"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_margin="3dp"
-            app:cardCornerRadius="20dp"
-            app:cardElevation="1dp"
-            app:cardPreventCornerOverlap="false"
-            app:cardUseCompatPadding="false">
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="12dp"
+            android:textSize="15sp"
+            android:lineSpacingExtra="4dp"
+            android:textColor="@color/text_primary"
+            android:text="消息内容" />
 
-            <TextView
-                android:id="@+id/txtContent"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:paddingHorizontal="14dp"
-                android:paddingVertical="10dp"
-                android:textSize="14sp"
-                android:lineSpacingExtra="2dp"
-                android:text="消息内容" />
-        </androidx.cardview.widget.CardView>
+        <!-- 时间戳（默认隐藏，由代码控制显示） -->
+        <TextView
+            android:id="@+id/txtTimestamp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="10sp"
+            android:textColor="@color/text_tertiary"
+            android:layout_marginTop="2dp"
+            android:layout_marginHorizontal="4dp"
+            android:visibility="gone" />
     </LinearLayout>
 </FrameLayout>

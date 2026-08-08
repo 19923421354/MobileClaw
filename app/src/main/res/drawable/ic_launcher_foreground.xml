@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 自适应图标前景：引用新生成的位图图标，避免引用矢量图造成回环 -->
+<!-- 自适应图标前景：居中裁剪显示，适配安全区域（72dp内） -->
 <bitmap xmlns:android="http://schemas.android.com/apk/res/android"
     android:src="@drawable/ic_launcher_icon"
-    android:gravity="fill" />
+    android:gravity="center"
+    android:antialias="true"
+    android:filter="true" />

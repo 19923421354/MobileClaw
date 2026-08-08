@@ -6,12 +6,12 @@
     android:orientation="vertical"
     android:background="@color/bg_main">
 
-    <!-- ============ 顶部状态栏（Material 卡片样式） ============ -->
+    <!-- ============ 顶部渐变状态栏 ============ -->
     <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         app:cardCornerRadius="0dp"
-        app:cardElevation="2dp"
+        app:cardElevation="3dp"
         app:cardBackgroundColor="@color/surface_white"
         app:strokeWidth="0dp">
 
@@ -19,29 +19,51 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:paddingHorizontal="14dp"
-            android:paddingVertical="10dp">
+            android:paddingHorizontal="16dp"
+            android:paddingTop="12dp"
+            android:paddingBottom="10dp">
 
-            <!-- 第一行：品牌 + AI 模型名 + 设置入口 -->
+            <!-- 第一行：品牌 + AI 状态 + 操作按钮 -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:layout_marginBottom="8dp">
+                android:layout_marginBottom="10dp">
 
-                <TextView
+                <!-- 品牌图标 + 名称 -->
+                <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="灵爪"
-                    android:textSize="18sp"
-                    android:textStyle="bold"
-                    android:textColor="@color/brand_primary" />
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:background="@drawable/bg_card_elevated"
+                    android:backgroundTint="#FFE8F0FE"
+                    android:paddingHorizontal="10dp"
+                    android:paddingVertical="4dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="灵爪"
+                        android:textSize="17sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/brand_primary" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text=" AI"
+                        android:textSize="13sp"
+                        android:textColor="@color/brand_primary_dark"
+                        android:layout_marginStart="2dp"
+                        android:alpha="0.7" />
+                </LinearLayout>
 
                 <View
                     android:layout_width="1dp"
-                    android:layout_height="16dp"
-                    android:layout_marginHorizontal="8dp"
+                    android:layout_height="18dp"
+                    android:layout_marginHorizontal="10dp"
                     android:background="@color/divider_light" />
 
                 <TextView
@@ -57,30 +79,36 @@
 
                 <ImageButton
                     android:id="@+id/btnProfile"
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
                     android:src="@drawable/ic_action_profile"
                     android:tint="@color/brand_secondary"
-                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:background="@drawable/bg_card_elevated"
+                    android:backgroundTint="#FFE0F7FA"
+                    android:padding="8dp"
                     android:contentDescription="我的" />
 
                 <ImageButton
                     android:id="@+id/btnSettings"
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:layout_marginStart="8dp"
                     android:src="@drawable/ic_action_settings"
                     android:tint="@color/brand_primary"
-                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:background="@drawable/bg_card_elevated"
+                    android:backgroundTint="#FFE8F0FE"
+                    android:padding="8dp"
                     android:contentDescription="设置" />
             </LinearLayout>
 
-            <!-- 第二行：权限状态（图标 + 数字） -->
+            <!-- 第二行：权限状态 + 模式开关 -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical">
 
+                <!-- 权限状态 -->
                 <LinearLayout
                     android:id="@+id/layoutShizukuStatus"
                     android:layout_width="wrap_content"
@@ -89,13 +117,14 @@
                     android:gravity="center_vertical"
                     android:clickable="true"
                     android:focusable="true"
-                    android:background="?android:attr/selectableItemBackground"
-                    android:paddingHorizontal="6dp"
+                    android:background="@drawable/bg_card_elevated"
+                    android:backgroundTint="#FFF0F2F5"
+                    android:paddingHorizontal="8dp"
                     android:paddingVertical="4dp">
 
                     <ImageView
-                        android:layout_width="14dp"
-                        android:layout_height="14dp"
+                        android:layout_width="12dp"
+                        android:layout_height="12dp"
                         android:src="@drawable/ic_action_verified"
                         android:tint="@color/text_secondary" />
 
@@ -115,16 +144,17 @@
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
                     android:gravity="center_vertical"
-                    android:layout_marginStart="10dp"
+                    android:layout_marginStart="8dp"
                     android:clickable="true"
                     android:focusable="true"
-                    android:background="?android:attr/selectableItemBackground"
-                    android:paddingHorizontal="6dp"
+                    android:background="@drawable/bg_card_elevated"
+                    android:backgroundTint="#FFF0F2F5"
+                    android:paddingHorizontal="8dp"
                     android:paddingVertical="4dp">
 
                     <ImageView
-                        android:layout_width="14dp"
-                        android:layout_height="14dp"
+                        android:layout_width="12dp"
+                        android:layout_height="12dp"
                         android:src="@drawable/ic_action_verified"
                         android:tint="@color/text_secondary" />
 
@@ -150,7 +180,7 @@
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:layout_marginTop="8dp">
+                android:layout_marginTop="10dp">
 
                 <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/switchTokenSaving"
@@ -159,7 +189,7 @@
                     android:text="省Token"
                     android:textSize="12sp"
                     android:textColor="@color/text_secondary"
-                    app:switchMinWidth="40dp"
+                    app:switchMinWidth="38dp"
                     app:thumbTint="@color/brand_primary"
                     app:trackTint="@color/divider_light" />
 
@@ -170,7 +200,7 @@
                     android:text="无上限"
                     android:textSize="12sp"
                     android:textColor="@color/text_secondary"
-                    app:switchMinWidth="40dp"
+                    app:switchMinWidth="38dp"
                     app:thumbTint="@color/brand_accent"
                     app:trackTint="@color/divider_light" />
 
@@ -178,11 +208,11 @@
                     android:id="@+id/switchLocalModel"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="本地模式"
+                    android:text="本地"
                     android:textSize="12sp"
                     android:textColor="@color/text_secondary"
-                    app:switchMinWidth="40dp"
-                    app:thumbTint="@color/brand_accent"
+                    app:switchMinWidth="38dp"
+                    app:thumbTint="@color/brand_purple"
                     app:trackTint="@color/divider_light" />
 
                 <Space
@@ -197,7 +227,7 @@
                     android:text="思考"
                     android:textSize="12sp"
                     android:textColor="@color/text_secondary"
-                    app:switchMinWidth="40dp"
+                    app:switchMinWidth="38dp"
                     app:thumbTint="@color/brand_primary"
                     app:trackTint="@color/divider_light" />
             </LinearLayout>
@@ -211,195 +241,412 @@
         android:layout_height="0dp"
         android:layout_weight="1"
         android:clipToPadding="false"
-        android:paddingHorizontal="6dp"
-        android:paddingTop="6dp"
+        android:paddingHorizontal="8dp"
+        android:paddingTop="8dp"
         android:paddingBottom="8dp"
-        android:scrollbars="vertical" />
+        android:scrollbars="vertical"
+        android:overScrollMode="ifContentScrolls" />
 
-    <!-- ============ 快捷操作栏（图标按钮） ============ -->
-    <HorizontalScrollView
+    <!-- ============ 快捷操作栏（圆角卡片风格） ============ -->
+    <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:scrollbars="none"
-        android:background="@color/surface_white"
-        android:elevation="2dp">
+        app:cardCornerRadius="0dp"
+        app:cardElevation="2dp"
+        app:cardBackgroundColor="@color/surface_white"
+        app:strokeWidth="0dp">
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingHorizontal="10dp"
+                android:paddingVertical="8dp"
+                android:gravity="center_vertical">
+
+                <!-- 截屏 -->
+                <LinearLayout
+                    android:id="@+id/btnScreenshot"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:paddingHorizontal="8dp"
+                    android:paddingVertical="4dp">
+
+                    <ImageView
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:src="@drawable/ic_action_camera"
+                        android:tint="@color/brand_primary" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="截屏"
+                        android:textSize="10sp"
+                        android:textColor="@color/text_secondary"
+                        android:layout_marginTop="2dp" />
+                </LinearLayout>
+
+                <!-- 返回 -->
+                <LinearLayout
+                    android:id="@+id/btnBack"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:paddingHorizontal="8dp"
+                    android:paddingVertical="4dp">
+
+                    <ImageView
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:src="@drawable/ic_action_back"
+                        android:tint="@color/brand_primary" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="返回"
+                        android:textSize="10sp"
+                        android:textColor="@color/text_secondary"
+                        android:layout_marginTop="2dp" />
+                </LinearLayout>
+
+                <!-- Home -->
+                <LinearLayout
+                    android:id="@+id/btnHome"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:paddingHorizontal="8dp"
+                    android:paddingVertical="4dp">
+
+                    <ImageView
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:src="@drawable/ic_action_home"
+                        android:tint="@color/brand_primary" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Home"
+                        android:textSize="10sp"
+                        android:textColor="@color/text_secondary"
+                        android:layout_marginTop="2dp" />
+                </LinearLayout>
+
+                <!-- 内存 -->
+                <LinearLayout
+                    android:id="@+id/btnMemory"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:paddingHorizontal="8dp"
+                    android:paddingVertical="4dp">
+
+                    <ImageView
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:src="@drawable/ic_action_memory"
+                        android:tint="@color/brand_primary" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="内存"
+                        android:textSize="10sp"
+                        android:textColor="@color/text_secondary"
+                        android:layout_marginTop="2dp" />
+                </LinearLayout>
+
+                <!-- 清理 -->
+                <LinearLayout
+                    android:id="@+id/btnClean"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:paddingHorizontal="8dp"
+                    android:paddingVertical="4dp">
+
+                    <ImageView
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:src="@drawable/ic_action_clean"
+                        android:tint="@color/brand_secondary" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="清理"
+                        android:textSize="10sp"
+                        android:textColor="@color/text_secondary"
+                        android:layout_marginTop="2dp" />
+                </LinearLayout>
+
+                <!-- 本地模型 -->
+                <LinearLayout
+                    android:id="@+id/btnLocalModel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:paddingHorizontal="8dp"
+                    android:paddingVertical="4dp">
+
+                    <ImageView
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:src="@drawable/ic_action_chip"
+                        android:tint="@color/brand_purple" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="模型"
+                        android:textSize="10sp"
+                        android:textColor="@color/text_secondary"
+                        android:layout_marginTop="2dp" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="32dp"
+                    android:layout_marginHorizontal="8dp"
+                    android:background="@color/divider_light" />
+
+                <!-- 设置 -->
+                <LinearLayout
+                    android:id="@+id/btnQuickSettings"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:paddingHorizontal="8dp"
+                    android:paddingVertical="4dp">
+
+                    <ImageView
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:src="@drawable/ic_action_settings"
+                        android:tint="@color/text_secondary" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="设置"
+                        android:textSize="10sp"
+                        android:textColor="@color/text_secondary"
+                        android:layout_marginTop="2dp" />
+                </LinearLayout>
+
+                <!-- 关于 -->
+                <LinearLayout
+                    android:id="@+id/btnAbout"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:paddingHorizontal="8dp"
+                    android:paddingVertical="4dp">
+
+                    <ImageView
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:src="@drawable/ic_action_info"
+                        android:tint="@color/brand_primary" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="关于"
+                        android:textSize="10sp"
+                        android:textColor="@color/text_secondary"
+                        android:layout_marginTop="2dp" />
+                </LinearLayout>
+
+                <!-- 更新 -->
+                <LinearLayout
+                    android:id="@+id/btnUpdate"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:paddingHorizontal="8dp"
+                    android:paddingVertical="4dp">
+
+                    <ImageView
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:src="@drawable/ic_action_verified"
+                        android:tint="@color/brand_accent" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="更新"
+                        android:textSize="10sp"
+                        android:textColor="@color/text_secondary"
+                        android:layout_marginTop="2dp" />
+                </LinearLayout>
+
+                <!-- 赞助 -->
+                <LinearLayout
+                    android:id="@+id/btnSponsor"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:paddingHorizontal="8dp"
+                    android:paddingVertical="4dp">
+
+                    <ImageView
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:src="@drawable/ic_action_chip"
+                        android:tint="#FFFF6B35" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="赞助"
+                        android:textSize="10sp"
+                        android:textColor="@color/text_secondary"
+                        android:layout_marginTop="2dp" />
+                </LinearLayout>
+
+                <!-- 命令历史 -->
+                <LinearLayout
+                    android:id="@+id/btnHistory"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:paddingHorizontal="8dp"
+                    android:paddingVertical="4dp">
+
+                    <ImageView
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:src="@drawable/ic_action_history"
+                        android:tint="@color/brand_primary" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="历史"
+                        android:textSize="10sp"
+                        android:textColor="@color/text_secondary"
+                        android:layout_marginTop="2dp" />
+                </LinearLayout>
+            </LinearLayout>
+        </HorizontalScrollView>
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- ============ 底部输入栏（圆角卡片风格） ============ -->
+    <com.google.android.material.card.MaterialCardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:cardCornerRadius="0dp"
+        app:cardElevation="6dp"
+        app:cardBackgroundColor="@color/surface_white"
+        app:strokeWidth="0dp">
 
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:paddingHorizontal="8dp"
-            android:paddingVertical="6dp">
+            android:gravity="center_vertical"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="8dp"
+            android:background="@color/surface_white">
+
+            <EditText
+                android:id="@+id/editInput"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:minHeight="44dp"
+                android:hint="输入指令，如：打开微信"
+                android:maxLines="4"
+                android:inputType="textMultiLine|textCapSentences"
+                android:background="@drawable/bg_input_rounded"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="10dp"
+                android:textSize="14sp"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_hint" />
 
             <ImageButton
-                android:id="@+id/btnScreenshot"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:layout_marginHorizontal="2dp"
-                android:src="@drawable/ic_action_camera"
-                android:tint="@color/brand_primary"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:contentDescription="截屏" />
-
-            <ImageButton
-                android:id="@+id/btnBack"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:layout_marginHorizontal="2dp"
-                android:src="@drawable/ic_action_back"
-                android:tint="@color/brand_primary"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:contentDescription="返回" />
-
-            <ImageButton
-                android:id="@+id/btnHome"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:layout_marginHorizontal="2dp"
-                android:src="@drawable/ic_action_home"
-                android:tint="@color/brand_primary"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Home" />
-
-            <ImageButton
-                android:id="@+id/btnMemory"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:layout_marginHorizontal="2dp"
-                android:src="@drawable/ic_action_memory"
-                android:tint="@color/brand_primary"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:contentDescription="内存" />
-
-            <ImageButton
-                android:id="@+id/btnClean"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:layout_marginHorizontal="2dp"
-                android:src="@drawable/ic_action_clean"
-                android:tint="@color/brand_secondary"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:contentDescription="清理" />
-
-            <ImageButton
-                android:id="@+id/btnLocalModel"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:layout_marginHorizontal="2dp"
-                android:src="@drawable/ic_action_chip"
-                android:tint="@color/brand_primary"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:contentDescription="本地模型" />
-
-            <ImageButton
-                android:id="@+id/btnQuickSettings"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:layout_marginHorizontal="2dp"
-                android:src="@drawable/ic_action_settings"
-                android:tint="@color/text_secondary"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:contentDescription="设置" />
-
-            <View
-                android:layout_width="1dp"
-                android:layout_height="24dp"
+                android:id="@+id/btnVoice"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
                 android:layout_marginHorizontal="6dp"
-                android:background="@color/divider_light" />
+                android:src="@drawable/ic_action_voice"
+                android:tint="@color/brand_secondary"
+                android:background="@drawable/bg_card_elevated"
+                android:backgroundTint="#FFE0F7FA"
+                android:padding="8dp"
+                android:contentDescription="语音输入" />
 
-            <ImageButton
-                android:id="@+id/btnAbout"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:layout_marginHorizontal="2dp"
-                android:src="@drawable/ic_action_info"
-                android:tint="@color/brand_primary"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:contentDescription="关于" />
-
-            <ImageButton
-                android:id="@+id/btnUpdate"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:layout_marginHorizontal="2dp"
-                android:src="@drawable/ic_action_verified"
-                android:tint="@color/brand_accent"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:contentDescription="检查更新" />
-
-            <ImageButton
-                android:id="@+id/btnSponsor"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:layout_marginHorizontal="2dp"
-                android:src="@drawable/ic_action_chip"
-                android:tint="@color/text_secondary"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:contentDescription="赞助" />
-
-            <ImageButton
-                android:id="@+id/btnHistory"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:layout_marginHorizontal="2dp"
-                android:src="@drawable/ic_action_history"
-                android:tint="@color/brand_primary"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:contentDescription="命令历史" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSend"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:text=""
+                app:icon="@drawable/ic_action_send"
+                app:iconTint="@android:color/white"
+                app:iconSize="20dp"
+                app:iconGravity="textStart"
+                app:backgroundTint="@color/brand_primary"
+                app:cornerRadius="26dp"
+                app:rippleColor="#33FFFFFF" />
         </LinearLayout>
-    </HorizontalScrollView>
-
-    <!-- ============ 底部输入栏 ============ -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:background="@color/surface_white"
-        android:gravity="center_vertical"
-        android:paddingHorizontal="10dp"
-        android:paddingVertical="8dp"
-        android:elevation="6dp">
-
-        <EditText
-            android:id="@+id/editInput"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:minHeight="48dp"
-            android:hint="输入指令，如：打开微信"
-            android:maxLines="4"
-            android:inputType="textMultiLine|textCapSentences"
-            android:background="@drawable/bg_edittext"
-            android:paddingHorizontal="16dp"
-            android:paddingVertical="12dp"
-            android:textSize="14sp"
-            android:textColor="#202020"
-            android:textColorHint="#9AA5B1" />
-
-        <ImageButton
-            android:id="@+id/btnVoice"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_marginHorizontal="6dp"
-            android:src="@drawable/ic_action_voice"
-            android:tint="@color/brand_primary"
-            android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:contentDescription="语音输入" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnSend"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:minWidth="0dp"
-            android:text="发送"
-            android:textSize="14sp"
-            android:textColor="@android:color/white"
-            app:icon="@drawable/ic_action_send"
-            app:iconTint="@android:color/white"
-            app:iconGravity="textStart"
-            app:iconPadding="6dp"
-            app:backgroundTint="@color/brand_primary"
-            app:cornerRadius="22dp" />
-    </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
 
 </LinearLayout>
