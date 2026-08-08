@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <!-- 深蓝渐变背景，与图标背景协调 -->
-    <path
-        android:fillColor="#FF0A1929"
-        android:pathData="M0,0h108v108h-108z" />
-</vector>
+<!-- 自适应图标背景：渐变紫到蓝，非纯色，富有层次感 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:startColor="#FF1E1B4B"
+        android:centerColor="#FF312E81"
+        android:endColor="#FF1E40AF"
+        android:angle="135"
+        android:type="linear" />
+</shape>
