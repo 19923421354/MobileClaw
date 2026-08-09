@@ -1,6 +1,6 @@
 {
-  "version": "2.3.0",
-  "versionCode": 36,
-  "releaseUrl": "https://github.com/19923421354/MobileClaw/releases/tag/v2.3.0",
-  "changelog": "🔥 v2.3.0 更新内容：\n\n🚀 修复检查更新核心问题：\n1. 🔧 修复 raw.githubusercontent.com CDN 缓存导致 version.json 返回旧版本问题\n2. 🔧 检查更新请求添加 Cache-Control: no-cache 头 + 随机缓存破坏参数，强制获取最新版本\n3. 🔧 版本号升级到 v2.3.0 强制刷新所有 CDN 节点缓存\n\n🎨 全新应用图标 v2（延续）：\n4. 🎯 机械灵爪抓取手机 + AI神经网络屏幕，直接彰显MobileClaw（Mobile+Claw）名称特征\n5. 💬 AI智能移动助手视觉语言，深空蓝紫渐变背景，科技感拉满\n\n🚀 下载引擎全面重写（延续）：\n6. 无预测试：不再对每个镜像发HEAD请求测速，直接下载，节省15+秒\n7. 实时网速每500ms精确采样，首次回调立即显示\n8. 安装自动处理 Android 8+ 未知来源权限，FileProvider 失败自动备用安装\n\n---\n开源协议: Apache 2.0 | 完全开源 | 仓库: https://github.com/19923421354/MobileClaw"
+  "version": "2.3.1",
+  "versionCode": 37,
+  "releaseUrl": "https://github.com/19923421354/MobileClaw/releases/tag/v2.3.1",
+  "changelog": "🔥 v2.3.1 更新内容：\n\n🚀 下载加速引擎 v3 — HTTP Range 分块并行下载：\n1. ⚡ 4 连接并发下载：将 APK 切成 4 块同时下载，每块独立 TCP 连接\n2. ⚡ 突破单连接限速：mirror.ghproxy.com 对免费用户限速 ~50KB/s，现已移除\n3. ⚡ 新增 jsDelivr 全球 CDN 镜像：国内有节点，不限速，替代 ghproxy\n4. ⚡ 缓冲区升级到 1MB（原 256KB），连接池 8 连接（原 4 连接）\n5. ⚡ 智能降级：不支持 Range 或文件太小时自动切回单线程\n\n🎨 全新应用图标 v2（延续）：\n6. 🎯 机械灵爪抓取手机 + AI神经网络屏幕，彰显MobileClaw特征\n\n🔧 修复：\n7. 修复检查更新 CDN 缓存问题：Cache-Control 头 + 随机参数绕过缓存\n8. 修复下载速度慢：移除限速代理 ghproxy，改为并行分块下载\n\n---\n开源协议: Apache 2.0 | 完全开源 | 仓库: https://github.com/19923421354/MobileClaw"
 }

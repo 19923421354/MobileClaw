@@ -1,7 +1,11 @@
 // Top-level build file
 buildscript {
     repositories {
-        maven { url 'https://dl.google.com/dl/android/maven2/' }
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/central' }
+        maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
+        maven { url 'https://maven.aliyun.com/repository/public' }
+        google()
         mavenCentral()
         gradlePluginPortal()
     }
@@ -14,9 +18,12 @@ buildscript {
 
 allprojects {
     repositories {
-        maven { url 'https://dl.google.com/dl/android/maven2/' }
-        mavenCentral()
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/central' }
+        maven { url 'https://maven.aliyun.com/repository/public' }
         maven { url 'https://jitpack.io' }
+        google()
+        mavenCentral()
     }
 }
 

@@ -2,13 +2,19 @@ package com.mobileclaw.app.util
 
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
+import java.io.RandomAccessFile
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -154,7 +160,7 @@ object UpdateChecker {
 
             val request = Request.Builder()
                 .url(cacheBusterUrl)
-                .header("User-Agent", "MobileClaw/2.3.0")
+                .header("User-Agent", "MobileClaw/2.3.1")
                 .header("Cache-Control", "no-cache, no-store, must-revalidate")
                 .header("Pragma", "no-cache")
                 .header("Expires", "0")
@@ -219,7 +225,7 @@ object UpdateChecker {
 
             val request = Request.Builder()
                 .url(cacheBusterUrl)
-                .header("User-Agent", "MobileClaw/2.3.0")
+                .header("User-Agent", "MobileClaw/2.3.1")
                 .header("Cache-Control", "no-cache, no-store, must-revalidate")
                 .header("Pragma", "no-cache")
                 .header("Expires", "0")
@@ -435,8 +441,8 @@ object UpdateChecker {
 
     // ========== 下载与安装 ==========
 
-    /** 下载缓冲区大小：256KB（比旧版 8KB 大 32 倍，大幅减少 I/O 循环次数） */
-    private const val BUFFER_SIZE = 256 * 1024
+    /** 下载缓冲区大小：1MB（大幅减少 I/O 循环次数，提升吞吐量） */
+    private const val BUFFER_SIZE = 1024 * 1024
 
     /** 速度采样间隔（毫秒）——每 500ms 计算一次实时网速 */
     private const val SPEED_SAMPLE_INTERVAL_MS = 500L
@@ -450,7 +456,14 @@ object UpdateChecker {
     /** 重试基础间隔（毫秒） */
     private const val RETRY_DELAY_MS = 2000L
 
-    /** 共享 OkHttpClient（连接池复用，避免每次新建连接的开销） */
+    /** 并行下载分块数（4 块并发，突破单连接限速） */
+    private const val PARALLEL_CHUNKS = 4
+
+    /** 最小分块大小（500KB，避免分块太小导致 TCP 慢启动开销过大） */
+    private const val MIN_CHUNK_SIZE = 512 * 1024L
+
+    /** 共享 OkHttpClient（连接池复用，避免每次新建连接的开销）
+     *  连接池增大到 8 个连接，保活 60 秒，支持并行分块下载 */
     private val sharedClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
@@ -459,22 +472,43 @@ object UpdateChecker {
             .followRedirects(true)
             .followSslRedirects(true)
             .retryOnConnectionFailure(true)
-            .connectionPool(okhttp3.ConnectionPool(4, 30, TimeUnit.SECONDS))
+            .connectionPool(okhttp3.ConnectionPool(8, 60, TimeUnit.SECONDS))
+            .build()
+    }
+
+    /** 单独用于探测的 OkHttpClient（短超时，不跟随重定向） */
+    private val probeClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .followRedirects(false)
+            .followSslRedirects(false)
             .build()
     }
 
     /**
      * 下载镜像列表。
      * 按优先级排列，依次尝试，不预测试。
-     * 1. 直链 GitHub（官方源）
-     * 2. mirror.ghproxy.com（国内加速）
-     * 3. 移除已失效的镜像（ghproxy.net、fastgit.org）
+     * 1. 直链 GitHub（官方源，海外/有梯子时最快）
+     * 2. jsDelivr CDN（全球 CDN，国内有节点，速度快，不限速）
+     * 3. 移除 mirror.ghproxy.com（该代理对免费用户限速 ~50KB/s）
      */
     private val DOWNLOAD_MIRRORS = listOf(
         // 1. 直接 GitHub 下载（官方源，海外/有梯子时最快）
         { url: String -> url },
-        // 2. mirror.ghproxy.com 镜像（国内加速，速度较快）
-        { url: String -> "https://mirror.ghproxy.com/$url" }
+        // 2. jsDelivr CDN 镜像（全球 CDN，国内速度好，不限速）
+        //    GitHub Release 的 APK 可以通过 jsDelivr 的 gh 路径加速
+        { url: String ->
+            // 将 GitHub Release URL 转为 jsDelivr CDN URL
+            val ghMatch = Regex("https://github\\.com/([^/]+)/([^/]+)/releases/download/v[^/]+/(.+)")
+                .find(url)
+            if (ghMatch != null) {
+                val owner = ghMatch.groupValues[1]
+                val repo = ghMatch.groupValues[2]
+                val filename = ghMatch.groupValues[3]
+                "https://cdn.jsdelivr.net/gh/$owner/$repo@main/app/build/outputs/apk/release/app-release.apk"
+            } else url
+        }
     )
 
     /**
@@ -499,15 +533,19 @@ object UpdateChecker {
     }
 
     /**
-     * 带进度和速度回调的 APK 下载（核心引擎，彻底重写）。
+     * 带进度和速度回调的 APK 下载（核心引擎，彻底重写 v3）。
      *
-     * 核心改进：
-     * - 无预测试：不再对每个镜像发 HEAD 请求测速，直接下载，节省 15+ 秒
-     * - 按优先级依次尝试镜像：直链 GitHub → mirror.ghproxy.com
-     * - 移除已失效的镜像源（ghproxy.net、fastgit.org）
-     * - 实时网速每 500ms 精确采样，首次回调立即显示
-     * - 256KB 大缓冲区，OkHttp 连接池复用
-     * - 安装时检查并请求 INSTALL_PACKAGES 权限
+     * 核心加速技术：HTTP Range 分块并行下载
+     * - 检测服务器是否支持 Range 请求（Accept-Ranges 头）
+     * - 支持时将文件切成 4 块，用 4 个协程并行下载
+     * - 每块各占一个独立的 TCP 连接，突破单连接限速
+     * - 每个连接用 1MB 缓冲区，最大化吞吐量
+     * - 实时网速每 500ms 精确采样，汇总所有分块总速度
+     * - 如果不支持 Range 或文件太小，自动降级为单线程下载
+     *
+     * 镜像策略：
+     * - 直链 GitHub → jsDelivr CDN（移除 ghproxy 限速代理）
+     * - 每个镜像先尝试并行下载，失败后降级单线程
      *
      * @param downloadUrl 原始下载地址（GitHub Releases URL）
      * @param destination 保存路径
@@ -531,98 +569,49 @@ object UpdateChecker {
         // 构建所有镜像 URL（按优先级排列）
         val urlsToTry = DOWNLOAD_MIRRORS.map { it(downloadUrl) }
 
-        // 依次尝试每个镜像，不预测试，直接下载
+        // 依次尝试每个镜像
         for ((mirrorIdx, mirrorUrl) in urlsToTry.withIndex()) {
             for (retry in 0 until MAX_RETRIES) {
                 Log.d(TAG, "下载尝试 [镜像${mirrorIdx + 1}/${urlsToTry.size}, 第${retry + 1}次]: ${mirrorUrl.take(80)}...")
 
                 try {
-                    val request = Request.Builder()
-                        .url(mirrorUrl)
-                        .header("User-Agent", "MobileClaw/2.3.0")
-                        .header("Accept", "application/octet-stream")
-                        .build()
-
-                    val response = sharedClient.newCall(request).execute()
-                    if (!response.isSuccessful) {
-                        Log.w(TAG, "下载失败: HTTP ${response.code}")
-                        response.close()
+                    // 第1步：探测文件大小和 Range 支持
+                    val probeResult = probeFileSize(mirrorUrl)
+                    if (probeResult == null) {
+                        Log.w(TAG, "探测失败，重试或换镜像")
                         if (retry < MAX_RETRIES - 1) {
                             delay(RETRY_DELAY_MS * (retry + 1))
                             continue
                         }
-                        break // 换下一个镜像
-                    }
-
-                    val body = response.body
-                    if (body == null) {
-                        Log.w(TAG, "响应体为空")
-                        response.close()
                         break
                     }
 
-                    val totalBytes = body.contentLength()
-                    var bytesRead = 0L
-                    // 速度采样：用滑动窗口，每 500ms 计算一次瞬时速度
-                    var lastSpeedSampleTime = System.nanoTime()
-                    var lastSpeedSampleBytes = 0L
-                    var currentSpeed = 0L
-                    var lastCallbackTime = 0L
+                    val (totalBytes, acceptsRange) = probeResult
+                    Log.d(TAG, "探测结果: 大小=${formatFileSize(totalBytes)}, Range支持=$acceptsRange")
 
                     // 首次回调：立即显示初始状态
                     progressCallback(0, if (totalBytes > 0) totalBytes else -1L, 0L)
 
-                    FileOutputStream(destination).use { output ->
-                        body.byteStream().use { input ->
-                            val buffer = ByteArray(BUFFER_SIZE)
-                            var bytesReadThisChunk: Int
+                    // 第2步：选择下载策略
+                    val downloadSuccess = if (acceptsRange && totalBytes >= MIN_CHUNK_SIZE * 2) {
+                        // 文件较大且支持 Range → 并行分块下载
+                        parallelChunkedDownload(mirrorUrl, destination, totalBytes, progressCallback)
+                    } else {
+                        // 文件小或不支持 Range → 单线程下载
+                        singleStreamDownload(mirrorUrl, destination, totalBytes, progressCallback)
+                    }
 
-                            // 主下载循环：每次读取 256KB
-                            while (input.read(buffer).also { bytesReadThisChunk = it } != -1) {
-                                output.write(buffer, 0, bytesReadThisChunk)
-                                bytesRead += bytesReadThisChunk
-
-                                val now = System.nanoTime()
-                                val elapsedSinceSample = (now - lastSpeedSampleTime) / 1_000_000L
-
-                                // 每 500ms 精确采样一次速度
-                                if (elapsedSinceSample >= SPEED_SAMPLE_INTERVAL_MS) {
-                                    val bytesSinceSample = bytesRead - lastSpeedSampleBytes
-                                    currentSpeed = if (elapsedSinceSample > 0 && bytesSinceSample > 0) {
-                                        (bytesSinceSample * 1000L) / elapsedSinceSample
-                                    } else 0L
-                                    lastSpeedSampleTime = now
-                                    lastSpeedSampleBytes = bytesRead
-                                }
-
-                                // 每 100ms 更新 UI（首次更新也在 100ms 内，不会等 500ms）
-                                val elapsedSinceCallback = (now - lastCallbackTime) / 1_000_000L
-                                if (elapsedSinceCallback >= PROGRESS_INTERVAL_MS) {
-                                    lastCallbackTime = now
-                                    // 如果还没到第一次速度采样，用平均速度
-                                    val displaySpeed = if (currentSpeed > 0) currentSpeed else {
-                                        val totalElapsed = (now - lastSpeedSampleTime) / 1_000_000L
-                                        if (totalElapsed > 0) (bytesRead * 1000L) / totalElapsed else 0L
-                                    }
-                                    progressCallback(bytesRead, totalBytes, displaySpeed)
-                                }
-                            }
+                    if (downloadSuccess) {
+                        val fileSize = destination.length()
+                        Log.d(TAG, "✓ 下载完成: ${destination.absolutePath} (${formatFileSize(fileSize)})")
+                        if (fileSize > 0) {
+                            progressCallback(fileSize, totalBytes, 0L)
+                            return@withContext DownloadResult(true, "下载成功")
                         }
                     }
 
-                    // 下载完成，最终回调
-                    progressCallback(bytesRead, totalBytes, currentSpeed)
-
-                    // 校验下载结果
-                    val fileSize = destination.length()
-                    Log.d(TAG, "✓ 下载完成: ${destination.absolutePath} (${formatFileSize(fileSize)})")
-
-                    if (fileSize > 0) {
-                        return@withContext DownloadResult(true, "下载成功")
-                    }
-
-                    Log.e(TAG, "下载的文件大小为 0，视为失败")
-                    destination.delete()
+                    Log.e(TAG, "下载失败，清理文件")
+                    if (destination.exists()) destination.delete()
                 } catch (e: Exception) {
                     Log.e(TAG, "下载异常 [镜像${mirrorIdx + 1}, 第${retry + 1}次]: ${e.message}")
                     if (destination.exists()) destination.delete()
@@ -636,6 +625,290 @@ object UpdateChecker {
         // 所有镜像和重试都失败
         Log.e(TAG, "✗ 所有下载尝试均失败")
         DownloadResult(false, "所有下载源均不可达，请检查网络连接")
+    }
+
+    /**
+     * 探测远程文件大小和 Range 支持情况。
+     * 通过 HEAD 请求获取 Content-Length 和 Accept-Ranges 头。
+     *
+     * @param url 下载地址
+     * @return Pair(文件大小, 是否支持Range分块)，探测失败返回 null
+     */
+    private suspend fun probeFileSize(url: String): Pair<Long, Boolean>? = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", "MobileClaw/2.3.1")
+                .head()
+                .build()
+
+            val response = probeClient.newCall(request).execute()
+            if (!response.isSuccessful && response.code !in 300..399) {
+                Log.w(TAG, "探测 HEAD 返回 ${response.code}")
+                response.close()
+                return@withContext null
+            }
+
+            // 如果返回重定向，用重定向后的 URL 重新探测
+            val location = response.header("Location")
+            if (location != null) {
+                Log.d(TAG, "探测到重定向: $location")
+                response.close()
+                // 用重定向 URL 再探测一次
+                val redirectRequest = Request.Builder()
+                    .url(location)
+                    .header("User-Agent", "MobileClaw/2.3.1")
+                    .head()
+                    .build()
+                val redirectResponse = probeClient.newCall(redirectRequest).execute()
+                val size = redirectResponse.body?.contentLength() ?: -1L
+                val rangeSupport = redirectResponse.header("Accept-Ranges")?.equals("bytes", ignoreCase = true) == true
+                redirectResponse.close()
+                return@withContext Pair(size, rangeSupport)
+            }
+
+            val size = response.body?.contentLength() ?: -1L
+            // 检查 Accept-Ranges 头，注意 GitHub 可能只在 GET 响应中才返回
+            val rangeSupport = response.header("Accept-Ranges")?.equals("bytes", ignoreCase = true) == true
+            response.close()
+            return@withContext Pair(size, rangeSupport)
+        } catch (e: Exception) {
+            Log.e(TAG, "探测文件大小失败", e)
+            null
+        }
+    }
+
+    /**
+     * 并行分块下载（核心加速引擎）。
+     *
+     * 将文件切成 [PARALLEL_CHUNKS] 块，每块用独立的协程和连接并发下载。
+     * 每块写入文件的指定偏移位置（RandomAccessFile）。
+     * 汇总所有分块的速度，反馈给 UI。
+     *
+     * @param url 下载地址
+     * @param destination 目标文件
+     * @param totalBytes 文件总大小
+     * @param progressCallback 进度回调
+     * @return 是否成功
+     */
+    private suspend fun parallelChunkedDownload(
+        url: String,
+        destination: File,
+        totalBytes: Long,
+        progressCallback: (bytesRead: Long, totalBytes: Long, speedBps: Long) -> Unit
+    ): Boolean = withContext(Dispatchers.IO) {
+        // 预分配文件空间
+        RandomAccessFile(destination, "rw").use { raf ->
+            raf.setLength(totalBytes)
+        }
+
+        // 计算每个分块的大小和偏移
+        val chunkSize = maxOf(totalBytes / PARALLEL_CHUNKS, MIN_CHUNK_SIZE)
+        val chunks = mutableListOf<Pair<Long, Long>>() // (start, end) inclusive
+        var offset = 0L
+        for (i in 0 until PARALLEL_CHUNKS) {
+            val start = offset
+            val end = if (i == PARALLEL_CHUNKS - 1) totalBytes - 1 else offset + chunkSize - 1
+            chunks.add(Pair(start, end.coerceAtMost(totalBytes - 1)))
+            offset = end + 1
+            if (offset >= totalBytes) break
+        }
+
+        Log.d(TAG, "并行分块: ${chunks.size} 块, 每块 ~${formatFileSize(chunkSize)}")
+
+        // 原子计数器，跨协程共享进度
+        val atomicBytesRead = AtomicLong(0L)
+        val lastSpeedSampleTime = AtomicLong(System.nanoTime())
+        val lastSpeedSampleBytes = AtomicLong(0L)
+        val currentSpeed = AtomicLong(0L)
+
+        try {
+            // 并行下载所有分块
+            coroutineScope {
+                val jobs = chunks.map { (start, end) ->
+                    async {
+                        downloadChunk(url, destination, start, end, atomicBytesRead, totalBytes,
+                            lastSpeedSampleTime, lastSpeedSampleBytes, currentSpeed, progressCallback)
+                    }
+                }
+                // 等待所有分块完成
+                val results = jobs.awaitAll()
+                results.all { it }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "并行下载失败", e)
+            false
+        }
+    }
+
+    /**
+     * 下载单个分块。
+     * 通过 HTTP Range 头请求指定字节范围，写入文件的对应偏移。
+     *
+     * @param url 下载地址
+     * @param destination 目标文件
+     * @param start 起始字节（含）
+     * @param end 结束字节（含）
+     * @param atomicBytesRead 原子计数器，累计已读字节
+     * @param totalBytes 文件总大小
+     * @param lastSpeedSampleTime 上次速度采样时间（原子）
+     * @param lastSpeedSampleBytes 上次速度采样时的字节数（原子）
+     * @param currentSpeed 当前速度（原子）
+     * @param progressCallback 进度回调
+     * @return 是否成功
+     */
+    private suspend fun downloadChunk(
+        url: String,
+        destination: File,
+        start: Long,
+        end: Long,
+        atomicBytesRead: AtomicLong,
+        totalBytes: Long,
+        lastSpeedSampleTime: AtomicLong,
+        lastSpeedSampleBytes: AtomicLong,
+        currentSpeed: AtomicLong,
+        progressCallback: (bytesRead: Long, totalBytes: Long, speedBps: Long) -> Unit
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val rangeHeader = "bytes=$start-$end"
+            Log.d(TAG, "分块下载: $rangeHeader (${formatFileSize(end - start + 1)})")
+
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", "MobileClaw/2.3.1")
+                .header("Accept", "application/octet-stream")
+                .header("Range", rangeHeader)
+                .build()
+
+            val response = sharedClient.newCall(request).execute()
+            if (!response.isSuccessful && response.code != 206) {
+                Log.w(TAG, "分块下载失败: HTTP ${response.code} for $rangeHeader")
+                response.close()
+                return@withContext false
+            }
+
+            val body = response.body ?: return@withContext false
+            var chunkBytesRead = 0L
+
+            // 用 RandomAccessFile 写入指定偏移
+            RandomAccessFile(destination, "rw").use { raf ->
+                raf.seek(start)
+                body.byteStream().use { input ->
+                    val buffer = ByteArray(BUFFER_SIZE)
+                    var bytesRead: Int
+                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                        raf.write(buffer, 0, bytesRead)
+                        chunkBytesRead += bytesRead
+
+                        // 更新原子进度
+                        val totalRead = atomicBytesRead.addAndGet(bytesRead.toLong())
+                        val now = System.nanoTime()
+                        val lastSample = lastSpeedSampleTime.get()
+                        val elapsedSinceSample = (now - lastSample) / 1_000_000L
+
+                        // 每 500ms 采样一次速度（谁先到谁采样）
+                        if (elapsedSinceSample >= SPEED_SAMPLE_INTERVAL_MS &&
+                            lastSpeedSampleTime.compareAndSet(lastSample, now)) {
+                            val lastBytes = lastSpeedSampleBytes.getAndSet(totalRead)
+                            val bytesSinceSample = totalRead - lastBytes
+                            if (bytesSinceSample > 0 && elapsedSinceSample > 0) {
+                                currentSpeed.set((bytesSinceSample * 1000L) / elapsedSinceSample)
+                            }
+                        }
+
+                        // 每 100ms 回调一次进度
+                        val displaySpeed = currentSpeed.get()
+                        progressCallback(totalRead, totalBytes, displaySpeed)
+                    }
+                }
+            }
+
+            Log.d(TAG, "分块完成: $rangeHeader (${formatFileSize(chunkBytesRead)})")
+            response.close()
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "分块下载异常 [$start-$end]: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * 单线程流式下载（降级方案）。
+     * 当服务器不支持 Range 或文件太小时使用。
+     * 与旧版兼容，但缓冲区升级到 1MB。
+     */
+    private suspend fun singleStreamDownload(
+        url: String,
+        destination: File,
+        totalBytes: Long,
+        progressCallback: (bytesRead: Long, totalBytes: Long, speedBps: Long) -> Unit
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "单线程下载: ${url.take(80)}...")
+
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", "MobileClaw/2.3.1")
+                .header("Accept", "application/octet-stream")
+                .build()
+
+            val response = sharedClient.newCall(request).execute()
+            if (!response.isSuccessful) {
+                Log.w(TAG, "单线程下载失败: HTTP ${response.code}")
+                response.close()
+                return@withContext false
+            }
+
+            val body = response.body ?: return@withContext false
+            var bytesRead = 0L
+            var lastSpeedSampleTime = System.nanoTime()
+            var lastSpeedSampleBytes = 0L
+            var currentSpeed = 0L
+            var lastCallbackTime = 0L
+
+            progressCallback(0, if (totalBytes > 0) totalBytes else -1L, 0L)
+
+            FileOutputStream(destination).use { output ->
+                body.byteStream().use { input ->
+                    val buffer = ByteArray(BUFFER_SIZE)
+                    var bytesReadThisChunk: Int
+
+                    while (input.read(buffer).also { bytesReadThisChunk = it } != -1) {
+                        output.write(buffer, 0, bytesReadThisChunk)
+                        bytesRead += bytesReadThisChunk
+
+                        val now = System.nanoTime()
+                        val elapsedSinceSample = (now - lastSpeedSampleTime) / 1_000_000L
+
+                        if (elapsedSinceSample >= SPEED_SAMPLE_INTERVAL_MS) {
+                            val bytesSinceSample = bytesRead - lastSpeedSampleBytes
+                            currentSpeed = if (elapsedSinceSample > 0 && bytesSinceSample > 0) {
+                                (bytesSinceSample * 1000L) / elapsedSinceSample
+                            } else 0L
+                            lastSpeedSampleTime = now
+                            lastSpeedSampleBytes = bytesRead
+                        }
+
+                        val elapsedSinceCallback = (now - lastCallbackTime) / 1_000_000L
+                        if (elapsedSinceCallback >= PROGRESS_INTERVAL_MS) {
+                            lastCallbackTime = now
+                            val displaySpeed = if (currentSpeed > 0) currentSpeed else {
+                                val totalElapsed = (now - lastSpeedSampleTime) / 1_000_000L
+                                if (totalElapsed > 0) (bytesRead * 1000L) / totalElapsed else 0L
+                            }
+                            progressCallback(bytesRead, totalBytes, displaySpeed)
+                        }
+                    }
+                }
+            }
+
+            response.close()
+            Log.d(TAG, "单线程下载完成: ${formatFileSize(bytesRead)}")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "单线程下载异常", e)
+            false
+        }
     }
 
     /**
