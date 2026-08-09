@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 可下载状态标签背景：浅橙色圆角矩形 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#FFFFF3E0" />
+    <corners android:radius="20dp" />
+    <stroke
+        android:width="0.5dp"
+        android:color="#FFFFE0B2" />
+</shape>

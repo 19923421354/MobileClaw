@@ -1,18 +1,24 @@
 package com.mobileclaw.app
 
-import android.app.AlertDialog
+import android.animation.ValueAnimator
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.Gravity
+import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.mobileclaw.app.ai.ClawController
 import com.mobileclaw.app.ai.DownloadProgress
 import com.mobileclaw.app.ai.DownloadStatus
@@ -28,12 +34,14 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * 本地模型管理 Activity。
+ * 本地模型管理 Activity (Material Design 3 风格)。
  *
  * 提供完整的模型管理界面，包括：
  * - 状态摘要展示（已下载数量、已加载模型、可下载数量）
  * - 可下载模型列表（支持下载/加载/删除操作）
  * - 本地模型文件导入
+ * - 下拉刷新
+ * - 进度条动画
  * - 实时刷新
  */
 class ModelManagementActivity : AppCompatActivity() {
@@ -52,6 +60,7 @@ class ModelManagementActivity : AppCompatActivity() {
     private lateinit var txtAvailableCount: TextView
     private lateinit var layoutImportModel: LinearLayout
     private lateinit var layoutModelList: LinearLayout
+    private lateinit var swipeRefresh: SwipeRefreshLayout
 
     private val handler = Handler(Looper.getMainLooper())
     private var controller: ClawController? = null
@@ -65,8 +74,19 @@ class ModelManagementActivity : AppCompatActivity() {
 
         // 设置按钮点击事件
         btnBack.setOnClickListener { finish() }
-        btnRefresh.setOnClickListener { refreshModelList() }
+        btnRefresh.setOnClickListener {
+            animateRefreshButton()
+            refreshModelList()
+        }
         layoutImportModel.setOnClickListener { showImportDialog() }
+
+        // 下拉刷新
+        swipeRefresh.setOnRefreshListener {
+            refreshModelList()
+            handler.postDelayed({
+                swipeRefresh.isRefreshing = false
+            }, 1000)
+        }
 
         // 加载模型列表
         refreshModelList()
@@ -84,6 +104,21 @@ class ModelManagementActivity : AppCompatActivity() {
         txtAvailableCount = findViewById(R.id.txtAvailableCount)
         layoutImportModel = findViewById(R.id.layoutImportModel)
         layoutModelList = findViewById(R.id.layoutModelList)
+        swipeRefresh = findViewById(R.id.swipeRefresh)
+    }
+
+    /**
+     * 刷新按钮旋转动画。
+     */
+    private fun animateRefreshButton() {
+        val animator = ValueAnimator.ofFloat(0f, 360f).apply {
+            duration = 600
+            interpolator = AccelerateDecelerateInterpolator()
+            addUpdateListener { animation ->
+                btnRefresh.rotation = animation.animatedValue as Float
+            }
+        }
+        animator.start()
     }
 
     /**
@@ -109,7 +144,7 @@ class ModelManagementActivity : AppCompatActivity() {
         val loadedModel = getLoadedModel(ctrl)
 
         if (modelSources.isEmpty()) {
-            layoutModelList.addView(createEmptyHint("暂无可用模型"))
+            layoutModelList.addView(createEmptyState("暂无可用模型", "连接到网络后可获取可用模型列表"))
             return
         }
 
@@ -153,7 +188,7 @@ class ModelManagementActivity : AppCompatActivity() {
     }
 
     /**
-     * 创建单个模型卡片视图。
+     * 创建单个模型卡片视图（Material Design 3 风格）。
      */
     private fun createModelCard(
         modelInfo: ModelInfo,
@@ -166,21 +201,27 @@ class ModelManagementActivity : AppCompatActivity() {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                setMargins(0, 0, 0, dpToPx(8))
+                setMargins(0, 0, 0, dpToPx(12))
             }
-            radius = dpToPx(12).toFloat()
-            cardElevation = dpToPx(2).toFloat()
-            setCardBackgroundColor(android.graphics.Color.parseColor("#FFFFFFFF"))
+            // Material3 风格：大圆角、柔和阴影
+            radius = dpToPx(16).toFloat()
+            cardElevation = dpToPx(3).toFloat()
+            setCardBackgroundColor(ContextCompat.getColor(this@ModelManagementActivity, R.color.surface_white))
             strokeWidth = dpToPx(1).toInt()
-            strokeColor = android.graphics.Color.parseColor("#FFE3E8EF")
+            strokeColor = ContextCompat.getColor(this@ModelManagementActivity, R.color.card_stroke)
+            // 点击涟漪效果
+            isClickable = true
+            isFocusable = true
+            setRippleColor(ContextCompat.getColorStateList(this@ModelManagementActivity, R.color.card_shadow_light))
         }
 
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dpToPx(14), dpToPx(12), dpToPx(14), dpToPx(12))
+            setPadding(dpToPx(16), dpToPx(14), dpToPx(16), dpToPx(14))
+            background = ContextCompat.getDrawable(this@ModelManagementActivity, R.drawable.bg_gradient_model_card)
         }
 
-        // 第一行：模型名称 + 状态标签
+        // 第一行：模型名称 + 状态标签（带图标）
         val nameRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(
@@ -191,52 +232,32 @@ class ModelManagementActivity : AppCompatActivity() {
 
         val nameText = TextView(this).apply {
             text = modelInfo.name
-            textSize = 15f
-            setTextColor(android.graphics.Color.parseColor("#FF202020"))
-            // 加粗
+            textSize = 16f
+            setTextColor(ContextCompat.getColor(this@ModelManagementActivity, R.color.text_primary))
             setTypeface(null, android.graphics.Typeface.BOLD)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         nameRow.addView(nameText)
 
-        // 状态标签
-        val statusLabel = TextView(this).apply {
-            text = when {
-                isLoaded -> "已加载"
-                isDownloaded -> "已下载"
-                else -> "未下载"
-            }
-            textSize = 11f
-            setPadding(dpToPx(8), dpToPx(2), dpToPx(8), dpToPx(2))
-            val (bgColor, textColor) = when {
-                isLoaded -> android.graphics.Color.parseColor("#E8F5E9") to android.graphics.Color.parseColor("#2E7D32")
-                isDownloaded -> android.graphics.Color.parseColor("#E3F2FD") to android.graphics.Color.parseColor("#1565C0")
-                else -> android.graphics.Color.parseColor("#FFF3E0") to android.graphics.Color.parseColor("#E65100")
-            }
-            setTextColor(textColor)
-            val bg = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = dpToPx(4).toFloat()
-                setColor(bgColor)
-            }
-            background = bg
-        }
+        // 状态标签（带图标 + 圆角背景）
+        val statusLabel = createStatusBadge(isLoaded, isDownloaded)
         nameRow.addView(statusLabel)
         container.addView(nameRow)
 
-        // 第二行：模型格式 + 大小
+        // 第二行：模型格式 + 大小 + 内存
         val infoRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             )
-            setPadding(0, dpToPx(4), 0, 0)
+            setPadding(0, dpToPx(6), 0, 0)
         }
 
         val formatText = TextView(this).apply {
             text = modelInfo.format.extension.uppercase()
-            textSize = 11f
-            setTextColor(android.graphics.Color.parseColor("#FF888888"))
+            textSize = 12f
+            setTextColor(ContextCompat.getColor(this@ModelManagementActivity, R.color.text_tertiary))
         }
         infoRow.addView(formatText)
 
@@ -247,16 +268,16 @@ class ModelManagementActivity : AppCompatActivity() {
         }
         val sizeText = TextView(this).apply {
             text = sizeStr
-            textSize = 11f
-            setTextColor(android.graphics.Color.parseColor("#FF888888"))
+            textSize = 12f
+            setTextColor(ContextCompat.getColor(this@ModelManagementActivity, R.color.text_tertiary))
         }
         infoRow.addView(sizeText)
 
         val ramStr = String.format(" | 内存: %dMB", modelInfo.requiredRam / (1024 * 1024))
         val ramText = TextView(this).apply {
             text = ramStr
-            textSize = 11f
-            setTextColor(android.graphics.Color.parseColor("#FF888888"))
+            textSize = 12f
+            setTextColor(ContextCompat.getColor(this@ModelManagementActivity, R.color.text_tertiary))
         }
         infoRow.addView(ramText)
         container.addView(infoRow)
@@ -264,48 +285,48 @@ class ModelManagementActivity : AppCompatActivity() {
         // 第三行：描述
         val descText = TextView(this).apply {
             text = modelInfo.description
-            textSize = 12f
-            setTextColor(android.graphics.Color.parseColor("#FF888888"))
-            setPadding(0, dpToPx(4), 0, 0)
+            textSize = 13f
+            setTextColor(ContextCompat.getColor(this@ModelManagementActivity, R.color.text_secondary))
+            setPadding(0, dpToPx(6), 0, 0)
             maxLines = 2
         }
         container.addView(descText)
 
-        // 第四行：操作按钮
+        // 第四行：进度条 + 操作按钮
         val actionRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             )
-            gravity = android.view.Gravity.END
-            setPadding(0, dpToPx(8), 0, 0)
+            gravity = Gravity.END
+            setPadding(0, dpToPx(10), 0, 0)
         }
 
         when {
             isLoaded -> {
-                actionRow.addView(createActionButton("卸载", android.graphics.Color.parseColor("#FFE57373")) {
+                actionRow.addView(createMaterialButton("卸载", R.color.error_red) {
                     ctrl.unloadModel(modelInfo.id)
                     showToast("正在卸载 ${modelInfo.name}...")
                     handler.postDelayed({ refreshModelList() }, 1500)
                 })
             }
             isDownloaded -> {
-                actionRow.addView(createActionButton("加载", android.graphics.Color.parseColor("#FF1A73E8")) {
+                actionRow.addView(createMaterialButton("加载", R.color.brand_primary) {
                     ctrl.loadModel(modelInfo.id)
                     showToast("正在加载 ${modelInfo.name}...")
                     handler.postDelayed({ refreshModelList() }, 2000)
                 })
-                actionRow.addView(createActionButton("删除", android.graphics.Color.parseColor("#FFE57373")) {
+                actionRow.addView(createMaterialButton("删除", R.color.error_red) {
                     confirmDeleteModel(modelInfo, ctrl)
                 })
             }
             else -> {
-                actionRow.addView(createActionButton("下载", android.graphics.Color.parseColor("#FF1A73E8")) {
+                actionRow.addView(createMaterialButton("下载", R.color.brand_primary) {
                     ctrl.downloadModel(modelInfo.id)
                     showToast("开始下载 ${modelInfo.name}...")
-                    // 定期刷新进度
-                    startProgressTracking(modelInfo.id, ctrl)
+                    // 显示下载进度条
+                    showDownloadProgress(modelInfo.id, ctrl)
                 })
             }
         }
@@ -316,42 +337,177 @@ class ModelManagementActivity : AppCompatActivity() {
     }
 
     /**
-     * 创建操作按钮（圆角文本按钮）。
+     * 创建状态标签（带图标 + 圆角背景）。
      */
-    private fun createActionButton(label: String, color: Int, onClick: () -> Unit): TextView {
-        val btn = TextView(this).apply {
-            text = label
-            textSize = 12f
-            setTextColor(android.graphics.Color.WHITE)
-            gravity = android.view.Gravity.CENTER
-            setPadding(dpToPx(12), dpToPx(6), dpToPx(12), dpToPx(6))
+    private fun createStatusBadge(isLoaded: Boolean, isDownloaded: Boolean): LinearLayout {
+        val text: String
+        val bgRes: Int
+        val iconRes: Int
+        val textColor: Int
+        when {
+            isLoaded -> {
+                text = "已加载"
+                bgRes = R.drawable.bg_status_loading
+                iconRes = R.drawable.ic_action_verified
+                textColor = R.color.success_green
+            }
+            isDownloaded -> {
+                text = "已下载"
+                bgRes = R.drawable.bg_status_downloaded
+                iconRes = R.drawable.ic_action_verified
+                textColor = R.color.brand_primary
+            }
+            else -> {
+                text = "可下载"
+                bgRes = R.drawable.bg_status_available
+                iconRes = R.drawable.ic_action_memory
+                textColor = R.color.warning_orange
+            }
+        }
+
+        val badge = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dpToPx(8), dpToPx(4), dpToPx(10), dpToPx(4))
+            background = ContextCompat.getDrawable(this@ModelManagementActivity, bgRes)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+
+        val icon = ImageView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(dpToPx(14), dpToPx(14))
+            setImageResource(iconRes)
+            setColorFilter(ContextCompat.getColor(this@ModelManagementActivity, textColor))
+            scaleType = ImageView.ScaleType.FIT_CENTER
+        }
+        badge.addView(icon)
+
+        val label = TextView(this).apply {
+            this.text = text
+            textSize = 11f
+            setTextColor(ContextCompat.getColor(this@ModelManagementActivity, textColor))
+            setTypeface(null, android.graphics.Typeface.BOLD)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                setMargins(dpToPx(4), 0, 0, 0)
+                marginStart = dpToPx(4)
             }
-            val bg = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = dpToPx(6).toFloat()
-                setColor(color)
+        }
+        badge.addView(label)
+
+        return badge
+    }
+
+    /**
+     * 创建 MaterialButton 风格的操作按钮。
+     */
+    private fun createMaterialButton(label: String, colorRes: Int, onClick: () -> Unit): MaterialButton {
+        val btn = MaterialButton(this).apply {
+            text = label
+            textSize = 13f
+            setTextColor(ContextCompat.getColor(this@ModelManagementActivity, R.color.text_on_primary))
+            isAllCaps = false
+            cornerRadius = dpToPx(8)
+            setBackgroundColor(ContextCompat.getColor(this@ModelManagementActivity, colorRes))
+            iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(dpToPx(6), 0, 0, 0)
             }
-            background = bg
             setOnClickListener { onClick() }
         }
         return btn
     }
 
     /**
-     * 创建空状态提示文本。
+     * 显示下载进度条。
      */
-    private fun createEmptyHint(text: String): TextView {
-        return TextView(this).apply {
-            this.text = text
-            textSize = 14f
-            setTextColor(android.graphics.Color.parseColor("#FF888888"))
-            gravity = android.view.Gravity.CENTER
-            setPadding(0, dpToPx(32), 0, dpToPx(32))
+    private fun showDownloadProgress(modelId: String, ctrl: ClawController) {
+        val progressRunnable = object : Runnable {
+            var checkCount = 0
+            override fun run() {
+                if (checkCount > 30) return // 最多跟踪 60 秒
+                checkCount++
+                val progress = ctrl.getModelDownloadProgress(modelId)
+                if (progress != null) {
+                    when (progress.status) {
+                        DownloadStatus.DOWNLOADING -> {
+                            val pct = if (progress.percentage >= 0) {
+                                String.format("%.1f%%", progress.percentage)
+                            } else {
+                                "未知"
+                            }
+                            val speed = String.format("%.1f MB/s", progress.speedBytesPerSec / (1024.0 * 1024))
+                            showToast("下载中: $pct ($speed)")
+                            handler.postDelayed(this, 2000)
+                        }
+                        DownloadStatus.COMPLETED, DownloadStatus.VERIFIED -> {
+                            showToast("下载完成！")
+                            refreshModelList()
+                        }
+                        DownloadStatus.FAILED -> {
+                            showToast("下载失败")
+                            refreshModelList()
+                        }
+                        else -> {
+                            handler.postDelayed(this, 2000)
+                        }
+                    }
+                } else {
+                    refreshModelList()
+                }
+            }
         }
+        handler.postDelayed(progressRunnable, 1500)
+    }
+
+    /**
+     * 创建空状态视图（带图标和提示文字）。
+     */
+    private fun createEmptyState(title: String, subtitle: String): LinearLayout {
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(0, dpToPx(48), 0, dpToPx(48))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+
+        val icon = ImageView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(dpToPx(56), dpToPx(56))
+            setImageResource(R.drawable.ic_action_chip)
+            setColorFilter(ContextCompat.getColor(this@ModelManagementActivity, R.color.text_tertiary))
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            alpha = 0.5f
+        }
+        container.addView(icon)
+
+        val titleText = TextView(this).apply {
+            text = title
+            textSize = 16f
+            setTextColor(ContextCompat.getColor(this@ModelManagementActivity, R.color.text_secondary))
+            gravity = Gravity.CENTER
+            setPadding(0, dpToPx(12), 0, 0)
+        }
+        container.addView(titleText)
+
+        val subtitleText = TextView(this).apply {
+            text = subtitle
+            textSize = 13f
+            setTextColor(ContextCompat.getColor(this@ModelManagementActivity, R.color.text_tertiary))
+            gravity = Gravity.CENTER
+            setPadding(0, dpToPx(4), 0, 0)
+        }
+        container.addView(subtitleText)
+
+        return container
     }
 
     /**
@@ -408,50 +564,6 @@ class ModelManagementActivity : AppCompatActivity() {
             }
             .setNegativeButton("取消", null)
             .show()
-    }
-
-    /**
-     * 启动下载进度跟踪。
-     * 定期检查下载进度并通过 Toast 提示。
-     */
-    private fun startProgressTracking(modelId: String, ctrl: ClawController) {
-        val progressRunnable = object : Runnable {
-            var checkCount = 0
-            override fun run() {
-                if (checkCount > 30) return // 最多跟踪 60 秒
-                checkCount++
-                val progress = ctrl.getModelDownloadProgress(modelId)
-                if (progress != null) {
-                    when (progress.status) {
-                        DownloadStatus.DOWNLOADING -> {
-                            val pct = if (progress.percentage >= 0) {
-                                String.format("%.1f%%", progress.percentage)
-                            } else {
-                                "未知"
-                            }
-                            val speed = String.format("%.1f MB/s", progress.speedBytesPerSec / (1024.0 * 1024))
-                            showToast("下载中: $pct ($speed)")
-                            handler.postDelayed(this, 2000)
-                        }
-                        DownloadStatus.COMPLETED, DownloadStatus.VERIFIED -> {
-                            showToast("下载完成！")
-                            refreshModelList()
-                        }
-                        DownloadStatus.FAILED -> {
-                            showToast("下载失败")
-                            refreshModelList()
-                        }
-                        else -> {
-                            handler.postDelayed(this, 2000)
-                        }
-                    }
-                } else {
-                    // 下载任务可能已结束，刷新列表
-                    refreshModelList()
-                }
-            }
-        }
-        handler.postDelayed(progressRunnable, 1500)
     }
 
     /**

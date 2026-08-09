@@ -1,6 +1,6 @@
 {
-  "version": "2.3.1",
-  "versionCode": 37,
-  "releaseUrl": "https://github.com/19923421354/MobileClaw/releases/tag/v2.3.1",
-  "changelog": "🔥 v2.3.1 更新内容：\n\n🚀 下载加速引擎 v3 — HTTP Range 分块并行下载：\n1. ⚡ 4 连接并发下载：将 APK 切成 4 块同时下载，每块独立 TCP 连接\n2. ⚡ 突破单连接限速：mirror.ghproxy.com 对免费用户限速 ~50KB/s，现已移除\n3. ⚡ 新增 jsDelivr 全球 CDN 镜像：国内有节点，不限速，替代 ghproxy\n4. ⚡ 缓冲区升级到 1MB（原 256KB），连接池 8 连接（原 4 连接）\n5. ⚡ 智能降级：不支持 Range 或文件太小时自动切回单线程\n\n🎨 全新应用图标 v2（延续）：\n6. 🎯 机械灵爪抓取手机 + AI神经网络屏幕，彰显MobileClaw特征\n\n🔧 修复：\n7. 修复检查更新 CDN 缓存问题：Cache-Control 头 + 随机参数绕过缓存\n8. 修复下载速度慢：移除限速代理 ghproxy，改为并行分块下载\n\n---\n开源协议: Apache 2.0 | 完全开源 | 仓库: https://github.com/19923421354/MobileClaw"
+  "version": "2.4.0",
+  "versionCode": 38,
+  "releaseUrl": "https://github.com/19923421354/MobileClaw/releases/tag/v2.4.0",
+  "changelog": "🔥 v2.4.0 更新内容：\n\n🚀 模型下载加速引擎 v4 — 国内镜像 + 并行分块下载：\n1. ⚡ 新增 hf-mirror.com 国内镜像：模型下载不再被墙，自动 Fallback 到 HuggingFace\n2. ⚡ 4 连接并发分块下载：HTTP Range 将模型文件切成 4 块同时下载，突破单连接限速\n3. ⚡ 智能降级：不支持 Range 时自动切回单线程 + 断点续传\n\n🎨 全新应用图标 v4 — AI 科技风格：\n4. 🎯 全新生成式 AI 科技图标：蓝紫渐变数字爪形，极具科技感与辨识度\n\n✨ UI 全面升级 v3 — Material Design 3 风格：\n5. 🎨 全面升级 Material Design 3 主题：蓝紫渐变品牌色 + Dynamic Color 支持\n6. 🎨 主界面优化：圆角品牌徽标、ChipGroup 模式开关、圆角快捷操作栏\n7. 🎨 模型管理界面优化：统计卡片带图标、渐变背景模型卡片、下拉刷新\n8. 🎨 状态栏/导航栏透明 + 浅色模式\n9. 🎨 修复所有界面 bug：解构声明错误、资源冲突、图标显示问题\n\n---\n开源协议: Apache 2.0 | 完全开源 | 仓库: https://github.com/19923421354/MobileClaw"
 }
