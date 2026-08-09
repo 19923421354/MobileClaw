@@ -1,6 +1,6 @@
 {
-  "version": "2.5.0",
-  "versionCode": 40,
-  "releaseUrl": "https://github.com/19923421354/MobileClaw/releases/tag/v2.5.0",
-  "changelog": "🔥 v2.5.0 重大更新：本地模型下载修复 + 全新 UI 界面\n\n🚀 本地模型下载修复：\n1. ⚡ 添加国内镜像优先策略：下载模型时自动先尝试 hf-mirror.com，失败后回退 huggingface.co\n2. ⚡ 修复「未知」状态：探测远程文件大小，不再显示「未知」\n3. ⚡ 支持断点续传：临时文件自动续传\n\n🎯 更多模型选择：\n4. 🆕 新增 Qwen2.5-Coder-0.5B（代码模型，约 420MB）\n5. 🆕 新增 DeepSeek-Coder-1.3B（代码模型，约 890MB）\n6. 🆕 新增 Qwen2.5-7B（Q4_K_M，约 4.1GB，旗舰模型）\n7. 🔍 搜索功能：按模型名称/描述实时搜索过滤\n8. 🏷️ 分类筛选：全部 / 推荐 / 代码 / 轻量 分类标签\n\n🎨 UI 全面升级：\n9. 📱 Material Design 3 风格：全新搜索栏、Chip 分类标签\n10. 🎨 渐变状态卡片：紫色渐变背景，更现代\n11. 📊 实时进度条：下载按钮点击后立即显示 LinearProgressIndicator\n12. ✨ 平滑动画：进度条 ValueAnimator 过渡动画\n\n---\n开源协议: Apache 2.0 | 完全开源 | 仓库: https://github.com/19923421354/MobileClaw"
+  "version": "2.5.1",
+  "versionCode": 41,
+  "releaseUrl": "https://github.com/19923421354/MobileClaw/releases/tag/v2.5.1",
+  "changelog": "🔥 v2.5.1 紧急修复：更新检查加载卡死问题\n\n🚀 更新检查大重构：\n1. ⚡ 并行检查：所有源同时发起请求，取最快结果，不再逐个等待超时\n2. ⚡ 添加 gh-proxy.com 镜像：国内可直接访问 GitHub Raw 内容\n3. ⚡ 添加 ghproxy.net 镜像：国内备用 GitHub 代理\n4. ⚡ 缩短超时：连接超时从 5s 降至 3s，整体 10s 硬超时兜底\n5. ⚡ 网络检测优先测试镜像源，更快判断网络连通性\n\n🎯 下载优化：\n6. 🔧 下载镜像列表已包含 gh-proxy.com / ghproxy.net（国内 APK 下载可用）\n7. 🔧 并行分块下载 + Range 探测，突破单连接限速\n\n---\n开源协议: Apache 2.0 | 完全开源 | 仓库: https://github.com/19923421354/MobileClaw"
 }

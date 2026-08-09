@@ -7,7 +7,9 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
@@ -22,11 +24,13 @@ import kotlinx.serialization.json.Json
 /**
  * 更新检查器。
  *
- * 通过多重镜像源获取最新版本信息：
- * 1. jsDelivr CDN（国内可访问，速度快）
- * 2. GitHub Releases API（官方源）
- * 3. Gitee 镜像（国内备用）
- * 4. 直链 HEAD 探测（最终回退）
+ * 通过多重镜像源获取最新版本信息（并行检查，取最快结果）：
+ * 1. gh-proxy.com 镜像（国内最快，通过 Cloudflare Workers 中转 GitHub Raw）
+ * 2. jsDelivr CDN（国内可访问，速度快，但可能有缓存延迟）
+ * 3. 直连 GitHub Raw（权威源，仅海外/有梯子时可用）
+ * 4. GitHub Releases API（官方源）
+ * 5. Gitee API（国内备用，但仓库可能不存在）
+ * 6. 直链 HEAD 探测（最终回退）
  *
  * 支持版本对比、更新日志展示、APK 下载与安装。
  */
@@ -34,33 +38,44 @@ object UpdateChecker {
 
     private const val TAG = "UpdateChecker"
 
+    /** 全局检查超时：10 秒内必须返回结果 */
+    private const val CHECK_TIMEOUT_MS = 10_000L
+
     /** GitHub 仓库所有者 */
     private const val GITHUB_OWNER = "19923421354"
 
     /** GitHub 仓库名 */
     private const val GITHUB_REPO = "MobileClaw"
 
-    /** 1. 直连 GitHub Raw（权威源，无 CDN 缓存延迟问题） */
+    /** 1. gh-proxy.com 镜像 URL（国内可访问，中转 GitHub Raw，速度最快） */
+    private const val MIRROR_VERSION_URL =
+        "https://gh-proxy.com/https://raw.githubusercontent.com/$GITHUB_OWNER/$GITHUB_REPO/main/version.json"
+
+    /** 1b. ghproxy.net 镜像 URL（国内备用，另一个 GitHub 代理服务） */
+    private const val MIRROR2_VERSION_URL =
+        "https://ghproxy.net/https://raw.githubusercontent.com/$GITHUB_OWNER/$GITHUB_REPO/main/version.json"
+
+    /** 2. 直连 GitHub Raw（权威源，无 CDN 缓存延迟问题） */
     private const val RAW_VERSION_URL =
         "https://raw.githubusercontent.com/$GITHUB_OWNER/$GITHUB_REPO/main/version.json"
 
-    /** 备用: jsDelivr CDN 镜像（国内可访问，但可能有缓存延迟） */
+    /** 3. 备用: jsDelivr CDN 镜像（国内可访问，但可能有缓存延迟） */
     private const val CDN_VERSION_URL =
         "https://cdn.jsdelivr.net/gh/$GITHUB_OWNER/$GITHUB_REPO@main/version.json"
 
-    /** 2. GitHub Releases API 地址 */
+    /** 4. GitHub Releases API 地址 */
     private const val RELEASES_API_URL =
         "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/releases/latest"
 
-    /** 3. Gitee 镜像（国内备用） */
+    /** 5. Gitee 镜像（国内备用） */
     private const val GITEE_RELEASES_URL =
         "https://gitee.com/api/v5/repos/$GITHUB_OWNER/$GITHUB_REPO/releases/latest"
 
     /** 下载超时（毫秒） */
     private const val DOWNLOAD_TIMEOUT_MS = 300_000L
 
-    /** 连接测试超时 */
-    private const val CONNECT_TIMEOUT_MS = 5000L
+    /** 连接测试超时（缩短到 3 秒，让并行检查快速失败） */
+    private const val CONNECT_TIMEOUT_MS = 3000L
 
     // ========== 版本号比较 ==========
 
@@ -90,11 +105,14 @@ object UpdateChecker {
                 .build()
 
             // 测试多个源，任意一个通即可
+            // 优先测试国内可访问的镜像源
             val testUrls = listOf(
-                "https://cdn.jsdelivr.net",
-                "https://api.github.com",
-                "https://github.com",
-                "https://gitee.com"
+                "https://gh-proxy.com",          // 国内 GitHub 代理（最快）
+                "https://ghproxy.net",            // 国内 GitHub 代理（备用）
+                "https://cdn.jsdelivr.net",       // CDN 国内可访问
+                "https://gitee.com",              // 国内代码托管
+                "https://api.github.com",         // GitHub API（海外/有梯子时可用）
+                "https://github.com"              // GitHub 主站（海外/有梯子时可用）
             )
             for (url in testUrls) {
                 try {
@@ -114,31 +132,80 @@ object UpdateChecker {
     // ========== 主要检查入口 ==========
 
     /**
-     * 检查是否有新版本（多重镜像 + 多重 Fallback）。
+     * 检查是否有新版本（并行检查 + 超时兜底）。
      *
-     * 检查顺序：
-     * 1. jsDelivr CDN（最快，国内可访问）
-     * 2. GitHub Releases API（官方源）
-     * 3. Gitee API（国内备用）
-     * 4. 直链 HEAD 探测（最终回退）
+     * 所有源同时发起请求，取最快返回的结果。
+     * 整体超时 10 秒，超时后立即返回 null（不卡住 UI）。
+     *
+     * 检查源（并行）：
+     * 1. gh-proxy.com 镜像（国内最快，中转 GitHub Raw）
+     * 2. jsDelivr CDN（国内可访问，速度较快）
+     * 3. 直连 GitHub Raw（权威源，仅海外/有梯子时可用）
+     * 4. GitHub Releases API（官方源）
+     * 5. Gitee API（国内备用）
+     * 6. 直链 HEAD 探测（最终回退）
      *
      * @param currentVersion 当前版本号（如 "2.0.5"）
      * @return [UpdateInfo] 有新版本时返回；无更新或失败时返回 null
      */
     suspend fun checkForUpdate(currentVersion: String): UpdateInfo? = withContext(Dispatchers.IO) {
-        // 尝试所有源，按优先级顺序
-        val result = tryRawGitHub(currentVersion)   // 1. 直连 GitHub Raw（最快最新，但国内可能被墙）
-            ?: tryGitHubApi(currentVersion)          // 2. GitHub API（官方源，权威）
-            ?: tryCdnMirror(currentVersion)          // 3. jsDelivr CDN（国内加速，但有缓存延迟）
-            ?: tryGiteeApi(currentVersion)           // 4. Gitee API（国内备用）
-            ?: tryFallbackCheck(currentVersion)      // 5. 直链 HEAD 探测（最终回退）
+        try {
+            // 使用 withTimeout 确保整体不超过 10 秒
+            val result = withTimeout(CHECK_TIMEOUT_MS) {
+                // 并行发起所有检查，取最快成功的结果
+                val deferreds = listOf(
+                    async { tryMirrorGitHub(currentVersion) },   // 1. gh-proxy 镜像（国内最快）
+                    async { tryMirror2GitHub(currentVersion) },  // 2. ghproxy.net 镜像（国内备用）
+                    async { tryRawGitHub(currentVersion) },      // 3. 直连 GitHub Raw
+                    async { tryGitHubApi(currentVersion) },       // 4. GitHub API
+                    async { tryCdnMirror(currentVersion) },       // 5. jsDelivr CDN
+                    async { tryGiteeApi(currentVersion) },        // 6. Gitee API
+                    async { tryFallbackCheck(currentVersion) }    // 7. 直链探测
+                )
 
-        if (result != null) {
-            Log.d(TAG, "检查更新完成，发现新版本: ${result.latestVersion}")
-        } else {
-            Log.d(TAG, "检查更新完成，无新版本或所有源均不可达")
+                // 轮询等待，有任一成功立即返回
+                val startTime = System.currentTimeMillis()
+                while (true) {
+                    // 检查是否超时
+                    if (System.currentTimeMillis() - startTime > CHECK_TIMEOUT_MS) {
+                        Log.d(TAG, "检查超时（${CHECK_TIMEOUT_MS}ms），放弃等待")
+                        break
+                    }
+
+                    // 检查任一任务是否已完成且成功
+                    for (deferred in deferreds) {
+                        if (deferred.isCompleted) {
+                            try {
+                                val r = deferred.getCompleted()
+                                if (r != null) {
+                                    Log.d(TAG, "✓ 并行检查成功，发现新版本: ${r.latestVersion}，" +
+                                            "耗时 ${System.currentTimeMillis() - startTime}ms")
+                                    return@withTimeout r
+                                }
+                            } catch (_: Exception) { /* 单个任务失败，继续等下一个 */ }
+                        }
+                    }
+
+                    // 所有任务都已完成但没有成功结果
+                    if (deferreds.all { it.isCompleted }) {
+                        Log.d(TAG, "所有并行源均检查完毕，无新版本或全部不可达")
+                        break
+                    }
+
+                    delay(100) // 短暂休眠后继续轮询
+                }
+
+                return@withTimeout null
+            }
+
+            return@withContext result
+        } catch (e: TimeoutCancellationException) {
+            Log.d(TAG, "检查超时（${CHECK_TIMEOUT_MS}ms），返回 null")
+            null
+        } catch (e: Exception) {
+            Log.e(TAG, "检查更新异常", e)
+            null
         }
-        return@withContext result
     }
 
     // ========== 各源实现 ==========
@@ -160,7 +227,7 @@ object UpdateChecker {
 
             val request = Request.Builder()
                 .url(cacheBusterUrl)
-                .header("User-Agent", "MobileClaw/2.4.1")
+                .header("User-Agent", "MobileClaw/2.5.1")
                 .header("Cache-Control", "no-cache, no-store, must-revalidate")
                 .header("Pragma", "no-cache")
                 .header("Expires", "0")
@@ -208,7 +275,126 @@ object UpdateChecker {
     }
 
     /**
-     * 2. jsDelivr CDN 镜像检查（备用源）。
+     * 2. gh-proxy.com 镜像检查（国内最快）。
+     * 通过 Cloudflare Workers 反向代理中转 GitHub Raw，在国内可直接访问。
+     * 比 jsDelivr CDN 更快且无缓存延迟。
+     */
+    private suspend fun tryMirrorGitHub(currentVersion: String): UpdateInfo? = withContext(Dispatchers.IO) {
+        try {
+            val cacheBusterUrl = "$MIRROR_VERSION_URL&t=${System.currentTimeMillis()}"
+            Log.d(TAG, "尝试 gh-proxy 镜像: $cacheBusterUrl")
+            val client = OkHttpClient.Builder()
+                .connectTimeout(CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                .readTimeout(CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                .build()
+
+            val request = Request.Builder()
+                .url(cacheBusterUrl)
+                .header("User-Agent", "MobileClaw/2.5.1")
+                .header("Cache-Control", "no-cache, no-store, must-revalidate")
+                .build()
+
+            val response = client.newCall(request).execute()
+            if (!response.isSuccessful) {
+                Log.w(TAG, "gh-proxy 镜像返回 ${response.code}")
+                response.close()
+                return@withContext null
+            }
+
+            val body = response.body?.string() ?: run {
+                response.close()
+                return@withContext null
+            }
+            response.close()
+
+            val json = Json { ignoreUnknownKeys = true }
+            val versionInfo = json.decodeFromString<CdnVersionInfo>(body)
+
+            val tagVersion = versionInfo.version.removePrefix("v").removePrefix("V")
+            if (compareVersions(tagVersion, currentVersion) <= 0) {
+                Log.d(TAG, "gh-proxy 镜像: 当前版本 $currentVersion 已是最新 (latest: $tagVersion)")
+                return@withContext null
+            }
+
+            val downloadUrl = "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/v$tagVersion/MobileClaw-v$tagVersion.apk"
+
+            UpdateInfo(
+                latestVersion = tagVersion,
+                downloadUrl = downloadUrl,
+                apkName = "MobileClaw-v$tagVersion.apk",
+                apkSize = 0L,
+                changelog = versionInfo.changelog ?: "请查看 GitHub Releases 获取完整更新日志。",
+                releaseUrl = versionInfo.releaseUrl
+                    ?: "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/tag/v$tagVersion",
+                publishedAt = ""
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "gh-proxy 镜像检查失败", e)
+            null
+        }
+    }
+
+    /**
+     * 3. ghproxy.net 镜像检查（国内备用）。
+     * 另一个 GitHub 代理服务，作为 gh-proxy.com 的备用。
+     */
+    private suspend fun tryMirror2GitHub(currentVersion: String): UpdateInfo? = withContext(Dispatchers.IO) {
+        try {
+            val cacheBusterUrl = "$MIRROR2_VERSION_URL&t=${System.currentTimeMillis()}"
+            Log.d(TAG, "尝试 ghproxy.net 镜像: $cacheBusterUrl")
+            val client = OkHttpClient.Builder()
+                .connectTimeout(CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                .readTimeout(CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                .build()
+
+            val request = Request.Builder()
+                .url(cacheBusterUrl)
+                .header("User-Agent", "MobileClaw/2.5.1")
+                .header("Cache-Control", "no-cache, no-store, must-revalidate")
+                .build()
+
+            val response = client.newCall(request).execute()
+            if (!response.isSuccessful) {
+                Log.w(TAG, "ghproxy.net 镜像返回 ${response.code}")
+                response.close()
+                return@withContext null
+            }
+
+            val body = response.body?.string() ?: run {
+                response.close()
+                return@withContext null
+            }
+            response.close()
+
+            val json = Json { ignoreUnknownKeys = true }
+            val versionInfo = json.decodeFromString<CdnVersionInfo>(body)
+
+            val tagVersion = versionInfo.version.removePrefix("v").removePrefix("V")
+            if (compareVersions(tagVersion, currentVersion) <= 0) {
+                Log.d(TAG, "ghproxy.net 镜像: 当前版本 $currentVersion 已是最新 (latest: $tagVersion)")
+                return@withContext null
+            }
+
+            val downloadUrl = "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/v$tagVersion/MobileClaw-v$tagVersion.apk"
+
+            UpdateInfo(
+                latestVersion = tagVersion,
+                downloadUrl = downloadUrl,
+                apkName = "MobileClaw-v$tagVersion.apk",
+                apkSize = 0L,
+                changelog = versionInfo.changelog ?: "请查看 GitHub Releases 获取完整更新日志。",
+                releaseUrl = versionInfo.releaseUrl
+                    ?: "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/tag/v$tagVersion",
+                publishedAt = ""
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "ghproxy.net 镜像检查失败", e)
+            null
+        }
+    }
+
+    /**
+     * 4. jsDelivr CDN 镜像检查（备用源）。
      * 通过 CDN 读取仓库根目录的 version.json 获取最新版本信息。
      * CDN 在国内可访问，但有缓存延迟（最长数小时）。
      * 改用 @main 分支代替 @latest，减少缓存不一致问题。
@@ -225,7 +411,7 @@ object UpdateChecker {
 
             val request = Request.Builder()
                 .url(cacheBusterUrl)
-                .header("User-Agent", "MobileClaw/2.4.1")
+                .header("User-Agent", "MobileClaw/2.5.1")
                 .header("Cache-Control", "no-cache, no-store, must-revalidate")
                 .header("Pragma", "no-cache")
                 .header("Expires", "0")
@@ -454,7 +640,7 @@ object UpdateChecker {
     private const val MAX_RETRIES = 3
 
     /** 重试基础间隔（毫秒） */
-    private const val RETRY_DELAY_MS = 2000L
+    private const val RETRY_DELAY_MS = 1000L
 
     /** 并行下载分块数（4 块并发，突破单连接限速） */
     private const val PARALLEL_CHUNKS = 4
@@ -476,44 +662,42 @@ object UpdateChecker {
             .build()
     }
 
-    /** 单独用于探测的 OkHttpClient（短超时，不跟随重定向） */
+    /** 单独用于探测的 OkHttpClient（短超时，不跟随重定向，快速失败） */
     private val probeClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(10, TimeUnit.SECONDS)
+            .connectTimeout(5, TimeUnit.SECONDS)
+            .readTimeout(5, TimeUnit.SECONDS)
             .followRedirects(false)
             .followSslRedirects(false)
+            .retryOnConnectionFailure(false)
             .build()
     }
 
     /**
      * 下载镜像列表。
-     * 按优先级排列，依次尝试，不预测试。
-     * 1. 直链 GitHub（官方源，海外/有梯子时最快）
-     * 2. jsDelivr CDN（全球 CDN，国内可访问，速度快，不限速）
-     *    注意：需将 APK 文件放入仓库 releases/ 目录下
-     * 3. gh-proxy 代理（国内备用，通过反向代理访问 GitHub Release）
-     * 4. 移除 mirror.ghproxy.com（该代理对免费用户限速 ~50KB/s）
+     * 按优先级排列，依次尝试。
+     *
+     * 注意：GitHub Release 附件不在仓库 Git 目录中，jsDelivr CDN 无法代理。
+     * 改用以下国内可用的代理：
+     * 1. 直链 GitHub（官方源，海外/有梯子时最快，会自动 302 到 CloudFront CDN）
+     * 2. gh-proxy.com 反向代理（国内常用，通过 Cloudflare Workers 中转）
+     * 3. ghproxy.net 反向代理（国内备用，另一个 GitHub 代理服务）
+     * 4. GitHub Release 直链（带 ?download= 参数，有时可绕过限制）
      */
     private val DOWNLOAD_MIRRORS = listOf(
         // 1. 直接 GitHub 下载（官方源，海外/有梯子时最快）
         { url: String -> url },
-        // 2. jsDelivr CDN 镜像（国内可访问，速度快）
-        //    仓库 releases/ 目录下的 APK 文件通过 jsDelivr CDN 加速
-        { url: String ->
-            val ghMatch = Regex("https://github\\.com/([^/]+)/([^/]+)/releases/download/v[^/]+/(.+)")
-                .find(url)
-            if (ghMatch != null) {
-                val owner = ghMatch.groupValues[1]
-                val repo = ghMatch.groupValues[2]
-                val filename = ghMatch.groupValues[3]
-                // 正确路径：仓库根目录下的 releases/ 文件夹
-                "https://cdn.jsdelivr.net/gh/$owner/$repo@main/releases/$filename"
-            } else url
-        },
-        // 3. gh-proxy 反向代理（国内备用，不限速）
+        // 2. gh-proxy.com 反向代理（国内常用，通过 Cloudflare Workers 中转 GitHub Release）
         { url: String ->
             "https://gh-proxy.com/$url"
+        },
+        // 3. ghproxy.net 反向代理（国内备用，另一个 GitHub 代理服务）
+        { url: String ->
+            "https://ghproxy.net/$url"
+        },
+        // 4. 带 ?download=1 参数的 GitHub 直链（有时可绕过某些限制）
+        { url: String ->
+            "$url?download=1"
         }
     )
 
@@ -642,42 +826,82 @@ object UpdateChecker {
      */
     private suspend fun probeFileSize(url: String): Pair<Long, Boolean>? = withContext(Dispatchers.IO) {
         try {
-            val request = Request.Builder()
+            // 先用 HEAD 探测（快速）
+            val headRequest = Request.Builder()
                 .url(url)
-                .header("User-Agent", "MobileClaw/2.4.1")
+                .header("User-Agent", "MobileClaw/2.5.1")
                 .head()
                 .build()
 
-            val response = probeClient.newCall(request).execute()
-            if (!response.isSuccessful && response.code !in 300..399) {
-                Log.w(TAG, "探测 HEAD 返回 ${response.code}")
-                response.close()
+            var headResponse = probeClient.newCall(headRequest).execute()
+            var responseCode = headResponse.code
+
+            // 处理重定向：用重定向后的 URL 重新 HEAD
+            var redirectCount = 0
+            while (responseCode in 300..399 && redirectCount < 5) {
+                val location = headResponse.header("Location")
+                headResponse.close()
+                if (location == null) break
+                Log.d(TAG, "HEAD 重定向: $location")
+                val redirectReq = Request.Builder()
+                    .url(location)
+                    .header("User-Agent", "MobileClaw/2.5.1")
+                    .head()
+                    .build()
+                headResponse = probeClient.newCall(redirectReq).execute()
+                responseCode = headResponse.code
+                redirectCount++
+            }
+
+            // HEAD 成功：直接返回 Content-Length
+            if (headResponse.isSuccessful) {
+                val size = headResponse.body?.contentLength() ?: -1L
+                val rangeSupport = headResponse.header("Accept-Ranges")
+                    ?.equals("bytes", ignoreCase = true) == true
+                headResponse.close()
+
+                if (size > 0) {
+                    Log.d(TAG, "HEAD 探测成功: 大小=$size, Range=$rangeSupport")
+                    return@withContext Pair(size, rangeSupport)
+                }
+                // HEAD 返回了 Content-Length=0 或 -1，可能是 GitHub 的 HEAD 限制
+                Log.d(TAG, "HEAD 未返回有效大小 (size=$size)，尝试 GET Range 探测")
+            }
+            headResponse.close()
+
+            // GitHub 对 HEAD 请求不返回 Content-Length（常见行为）
+            // 改用 GET + Range: bytes=0-0 来获取文件大小
+            // 这是 GitHub API 推荐的方式
+            Log.d(TAG, "使用 GET Range 方式探测文件大小: ${url.take(80)}...")
+            val rangeRequest = Request.Builder()
+                .url(url)
+                .header("User-Agent", "MobileClaw/2.5.1")
+                .header("Range", "bytes=0-0")
+                .build()
+
+            // 用 sharedClient（支持重定向）来发送 GET Range 请求
+            val rangeResponse = sharedClient.newCall(rangeRequest).execute()
+            if (!rangeResponse.isSuccessful && rangeResponse.code != 206) {
+                Log.w(TAG, "GET Range 探测失败: HTTP ${rangeResponse.code}")
+                rangeResponse.close()
                 return@withContext null
             }
 
-            // 如果返回重定向，用重定向后的 URL 重新探测
-            val location = response.header("Location")
-            if (location != null) {
-                Log.d(TAG, "探测到重定向: $location")
-                response.close()
-                // 用重定向 URL 再探测一次
-                val redirectRequest = Request.Builder()
-                    .url(location)
-                    .header("User-Agent", "MobileClaw/2.4.1")
-                    .head()
-                    .build()
-                val redirectResponse = probeClient.newCall(redirectRequest).execute()
-                val size = redirectResponse.body?.contentLength() ?: -1L
-                val rangeSupport = redirectResponse.header("Accept-Ranges")?.equals("bytes", ignoreCase = true) == true
-                redirectResponse.close()
-                return@withContext Pair(size, rangeSupport)
+            // 从 Content-Range 头解析文件总大小
+            // Content-Range 格式: bytes 0-0/{totalSize}
+            val contentRange = rangeResponse.header("Content-Range")
+            val totalSize = if (contentRange != null) {
+                val total = contentRange.substringAfter('/').toLongOrNull()
+                total ?: rangeResponse.body?.contentLength() ?: -1L
+            } else {
+                rangeResponse.body?.contentLength() ?: -1L
             }
+            val supportsRange = rangeResponse.code == 206
+            rangeResponse.close()
 
-            val size = response.body?.contentLength() ?: -1L
-            // 检查 Accept-Ranges 头，注意 GitHub 可能只在 GET 响应中才返回
-            val rangeSupport = response.header("Accept-Ranges")?.equals("bytes", ignoreCase = true) == true
-            response.close()
-            return@withContext Pair(size, rangeSupport)
+            Log.d(TAG, "GET Range 探测成功: 大小=$totalSize, Range=$supportsRange")
+            return@withContext Pair(totalSize, supportsRange)
+
         } catch (e: Exception) {
             Log.e(TAG, "探测文件大小失败", e)
             null
@@ -781,7 +1005,7 @@ object UpdateChecker {
 
             val request = Request.Builder()
                 .url(url)
-                .header("User-Agent", "MobileClaw/2.4.1")
+                .header("User-Agent", "MobileClaw/2.5.1")
                 .header("Accept", "application/octet-stream")
                 .header("Range", rangeHeader)
                 .build()
@@ -854,7 +1078,7 @@ object UpdateChecker {
 
             val request = Request.Builder()
                 .url(url)
-                .header("User-Agent", "MobileClaw/2.4.1")
+                .header("User-Agent", "MobileClaw/2.5.1")
                 .header("Accept", "application/octet-stream")
                 .build()
 

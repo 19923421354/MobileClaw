@@ -1925,7 +1925,7 @@ class MainActivity : AppCompatActivity() {
         }
         val dialog = AlertDialog.Builder(this)
             .setTitle("检查更新")
-            .setMessage("正在检查新版本…\n（通过 GitHub Releases 直接下载，无需跳转网页）")
+            .setMessage("正在检查新版本…\n（通过国内镜像加速，几秒内返回结果）")
             .setView(progressView)
             .setCancelable(false)
             .show()
@@ -1944,11 +1944,11 @@ class MainActivity : AppCompatActivity() {
                         .setTitle("检查更新")
                         .setMessage(if (networkOk) {
                             "当前已是最新版本（v$appVersion），无需更新。\n\n" +
-                            "已通过 jsDelivr CDN 镜像 + GitHub API 等多源检查，确认暂无新版本。\n\n" +
+                            "已通过 gh-proxy.com 镜像 + jsDelivr CDN 等多源并行检查，确认暂无新版本。\n\n" +
                             "如有新版本发布，会自动在应用内检测到并下载安装。"
                         } else {
                             "检查更新失败：无法连接到更新服务器。\n\n" +
-                            "检测了 jsDelivr CDN、GitHub API、Gitee 等多个源均不可达。\n\n" +
+                            "检测了 gh-proxy.com、ghproxy.net、jsDelivr CDN、Gitee、GitHub API 等多个源均不可达。\n\n" +
                             "请检查网络连接后重试。\n\n" +
                             "你也可以前往 GitHub 查看最新版本：\n" +
                             "github.com/19923421354/MobileClaw/releases"
