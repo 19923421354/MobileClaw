@@ -873,7 +873,7 @@ class ShellExecutorAdapter(
     override suspend fun sendNotification(title: String, content: String): ClawActionResult {
         return try {
             val mgr = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-            val channelId = "mobileclaw_agent"
+            val channelId = "mobileclaw_agent_v2"
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                 val channel = android.app.NotificationChannel(
                     channelId, "MobileClaw Agent", android.app.NotificationManager.IMPORTANCE_DEFAULT
@@ -881,7 +881,7 @@ class ShellExecutorAdapter(
                 mgr.createNotificationChannel(channel)
             }
             val notification = android.app.Notification.Builder(context, channelId)
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setSmallIcon(com.mobileclaw.app.R.drawable.ic_notification)
                 .setContentTitle(title)
                 .setContentText(content)
                 .build()
@@ -1035,7 +1035,7 @@ class ShellExecutorAdapter(
             // 降级：发送通知作为提醒
             try {
                 val mgr = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-                val channelId = "mobileclaw_timer"
+                val channelId = "mobileclaw_timer_v2"
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                     val channel = android.app.NotificationChannel(
                         channelId, "MobileClaw Timer", android.app.NotificationManager.IMPORTANCE_HIGH
@@ -1043,7 +1043,7 @@ class ShellExecutorAdapter(
                     mgr.createNotificationChannel(channel)
                 }
                 val notification = android.app.Notification.Builder(context, channelId)
-                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                    .setSmallIcon(com.mobileclaw.app.R.drawable.ic_notification)
                     .setContentTitle("定时器")
                     .setContentText("已设置 ${durationSec}秒 定时器（设备不支持系统定时器）")
                     .build()

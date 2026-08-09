@@ -1,0 +1,142 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- ================================================================ -->
+    <!-- 主主题：Material Design 3 (Material You) Dark Mode                -->
+    <!-- ================================================================ -->
+    <style name="Theme.MobileClaw" parent="Theme.Material3.Dark.NoActionBar">
+        <!-- 品牌色 - 蓝紫渐变主色 -->
+        <item name="colorPrimary">#FF667EEA</item>
+        <item name="colorOnPrimary">#FFFFFFFF</item>
+        <item name="colorPrimaryContainer">#FF2D3A8A</item>
+        <item name="colorOnPrimaryContainer">#FFDDE3FF</item>
+
+        <!-- 品牌色 - 辅助色（紫色） -->
+        <item name="colorSecondary">#FF7B4DFF</item>
+        <item name="colorOnSecondary">#FFFFFFFF</item>
+        <item name="colorSecondaryContainer">#FF3D1A8A</item>
+        <item name="colorOnSecondaryContainer">#FFEADEFF</item>
+
+        <!-- 品牌色 - 第三色（青色点缀） -->
+        <item name="colorTertiary">#FF00BFA5</item>
+        <item name="colorOnTertiary">#FFFFFFFF</item>
+        <item name="colorTertiaryContainer">#FF004D40</item>
+        <item name="colorOnTertiaryContainer">#FFA0F2E1</item>
+
+        <!-- 错误色 -->
+        <item name="colorError">#FFEF4444</item>
+        <item name="colorOnError">#FFFFFFFF</item>
+        <item name="colorErrorContainer">#FF93000A</item>
+        <item name="colorOnErrorContainer">#FFFFDAD6</item>
+
+        <!-- 背景与表面 -->
+        <item name="android:colorBackground">#FF0F0F1A</item>
+        <item name="colorOnBackground">#FFE8E8F0</item>
+        <item name="colorSurface">#FF1A1A2E</item>
+        <item name="colorOnSurface">#FFE8E8F0</item>
+        <item name="colorSurfaceVariant">#FF2D2D44</item>
+        <item name="colorOnSurfaceVariant">#FFCAC4D0</item>
+
+        <!-- 轮廓色 -->
+        <item name="colorOutline">#FF938F99</item>
+        <item name="colorOutlineVariant">#FF49454F</item>
+
+        <!-- 窗口背景 -->
+        <item name="android:windowBackground">#FF0F0F1A</item>
+
+        <!-- 状态栏 - 深色 -->
+        <item name="android:statusBarColor" tools:targetApi="l">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">false</item>
+        <item name="android:navigationBarColor" tools:targetApi="l">@android:color/transparent</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="m">false</item>
+
+        <!-- Material Design 3 Dynamic Color 支持（Android 12+） -->
+    </style>
+
+    <!-- ================================================================ -->
+    <!-- 品牌色 - 主色系（蓝紫渐变）                                      -->
+    <!-- ================================================================ -->
+    <color name="brand_primary">#FF667EEA</color>
+    <color name="brand_primary_dark">#FF4A5FD4</color>
+    <color name="brand_primary_light">#FFDDE3FF</color>
+    <color name="brand_primary_gradient_start">#FF667EEA</color>
+    <color name="brand_primary_gradient_end">#FF7B4DFF</color>
+
+    <!-- 品牌色 - 辅色系（紫色） -->
+    <color name="brand_secondary">#FF7B4DFF</color>
+    <color name="brand_secondary_dark">#FF5C2FD6</color>
+    <color name="brand_secondary_light">#FFEADEFF</color>
+
+    <!-- 品牌色 - 强调色（青色） -->
+    <color name="brand_accent">#FF00BFA5</color>
+    <color name="brand_accent_light">#FFA0F2E1</color>
+
+    <!-- 品牌色 - 紫 -->
+    <color name="brand_purple">#FF7C4DFF</color>
+    <color name="brand_purple_light">#FFF0EBFF</color>
+
+    <!-- 背景渐变 -->
+    <color name="bg_gradient_start">#FF667EEA</color>
+    <color name="bg_gradient_end">#FF7B4DFF</color>
+    <color name="bg_gradient_light_start">#FF2D1B69</color>
+    <color name="bg_gradient_light_end">#FF1A1A3E</color>
+
+    <!-- 背景色系 -->
+    <color name="bg_main">#FF0F0F1A</color>
+    <color name="bg_card">#FF1A1A2E</color>
+    <color name="bg_chat">#FF0F0F1A</color>
+    <color name="bg_input">#FF1E1E32</color>
+    <color name="bg_input_focused">#FF2A2A4A</color>
+
+    <!-- 卡片阴影 -->
+    <color name="card_shadow_light">#FF1A1A2E</color>
+    <color name="card_shadow_medium">#33000000</color>
+    <color name="card_shadow_dark">#4D000000</color>
+    <color name="card_stroke">#FF2D2D44</color>
+
+    <!-- 表面色 -->
+    <color name="surface_white">#FF1A1A2E</color>
+    <color name="surface_elevated">#FF22223A</color>
+
+    <!-- 消息气泡 -->
+    <color name="user_msg_bg">#FF667EEA</color>
+    <color name="user_msg_bg_gradient_start">#FF667EEA</color>
+    <color name="user_msg_bg_gradient_end">#FF7B4DFF</color>
+    <color name="ai_msg_bg">#FF1A1A2E</color>
+    <color name="ai_msg_border">#FF2D2D44</color>
+
+    <!-- 文字色 -->
+    <color name="text_primary">#FFE8E8F0</color>
+    <color name="text_secondary">#FF9CA3AF</color>
+    <color name="text_tertiary">#FF6B7280</color>
+    <color name="text_on_primary">#FFFFFFFF</color>
+    <color name="text_on_gradient">#FFFFFFFF</color>
+    <color name="text_hint">#FF4B5563</color>
+
+    <!-- 分割线 & 边框 -->
+    <color name="divider_light">#FF2D2D44</color>
+    <color name="divider_medium">#FF3D3D55</color>
+    <color name="stroke_light">#FF2D2D44</color>
+
+    <!-- 功能色 -->
+    <color name="success_green">#FF10B981</color>
+    <color name="success_green_light">#FF064E3B</color>
+    <color name="warning_orange">#FFFF9800</color>
+    <color name="warning_orange_light">#FF3E2D00</color>
+    <color name="error_red">#FFEF4444</color>
+    <color name="error_red_light">#FF3B1111</color>
+
+    <!-- 阴影色 -->
+    <color name="shadow_color">#4D000000</color>
+
+    <!-- 图标深蓝色 -->
+    <color name="icon_deep_blue">#FFE8E8F0</color>
+
+    <!-- 渐变数组（用于代码中创建 GradientDrawable） -->
+    <array name="brand_gradient_colors">
+        <item>#FF667EEA</item>
+        <item>#FF7B4DFF</item>
+    </array>
+    <array name="accent_gradient_colors">
+        <item>#FF00BFA5</item>
+        <item>#FF009688</item>
+    </array>
+</resources>

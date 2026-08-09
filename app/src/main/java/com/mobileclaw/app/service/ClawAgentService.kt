@@ -29,7 +29,7 @@ class ClawAgentService : Service() {
 
     companion object {
         private const val TAG = "ClawAgentService"
-        private const val CHANNEL_ID = "mobileclaw_agent"
+        private const val CHANNEL_ID = "mobileclaw_agent_v2"
         private const val NOTIFICATION_ID = 1001
 
         fun start(context: Context) {
@@ -97,7 +97,7 @@ class ClawAgentService : Service() {
             Notification.Builder(this)
         }
         return builder
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(com.mobileclaw.app.R.drawable.ic_notification)
             .setContentTitle("MobileClaw 小龙虾")
             .setContentText(text)
             .setOngoing(true)

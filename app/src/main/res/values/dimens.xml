@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 快捷建议芯片尺寸 -->
+    <dimen name="chip_margin_start">4dp</dimen>
+    <dimen name="chip_margin_end">4dp</dimen>
+    <dimen name="chip_margin_bottom">8dp</dimen>
+    <dimen name="chip_corner_radius">16dp</dimen>
+    <dimen name="chip_padding_horizontal">14dp</dimen>
+    <dimen name="chip_padding_vertical">8dp</dimen>
+</resources>

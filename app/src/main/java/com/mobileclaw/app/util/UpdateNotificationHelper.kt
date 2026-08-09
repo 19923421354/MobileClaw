@@ -8,7 +8,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 
 object UpdateNotificationHelper {
-    private const val CHANNEL_ID = "update_download"
+    private const val CHANNEL_ID = "update_download_v2"
     private const val NOTIFICATION_ID = 1002
     private const val TAG = "UpdateNotification"
 
@@ -60,7 +60,7 @@ object UpdateNotificationHelper {
         val progress = if (totalBytes > 0) bytesRead.toInt() else 0
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setSmallIcon(com.mobileclaw.app.R.drawable.ic_notification)
             .setContentTitle("正在下载更新")
             .setContentText("$fileName — $progressText")
             .setStyle(NotificationCompat.BigTextStyle()
@@ -115,7 +115,7 @@ object UpdateNotificationHelper {
         createChannel(context)
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setSmallIcon(com.mobileclaw.app.R.drawable.ic_notification)
             .setContentTitle("下载完成")
             .setContentText("$fileName 已下载完成")
             .setProgress(0, 0, false)
@@ -130,7 +130,7 @@ object UpdateNotificationHelper {
         createChannel(context)
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_notify_error)
+            .setSmallIcon(com.mobileclaw.app.R.drawable.ic_notification)
             .setContentTitle("下载失败")
             .setContentText(errorMsg)
             .setProgress(0, 0, false)

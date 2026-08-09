@@ -52,7 +52,7 @@ import kotlinx.coroutines.launch
 class FloatingPanelService : Service() {
 
     companion object {
-        private const val CHANNEL_ID = "mobileclaw_floating"
+        private const val CHANNEL_ID = "mobileclaw_floating_v2"
         private const val NOTIFICATION_ID = 1002
         private const val BUTTON_SIZE = 56 // dp
         private const val PANEL_WIDTH = 280 // dp
@@ -494,7 +494,7 @@ class FloatingPanelService : Service() {
             Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle("灵爪悬浮面板")
                 .setContentText("悬浮快捷面板运行中")
-                .setSmallIcon(android.R.drawable.ic_menu_compass)
+                .setSmallIcon(com.mobileclaw.app.R.drawable.ic_notification)
                 .setOngoing(true)
                 .build()
         } else {
@@ -502,7 +502,7 @@ class FloatingPanelService : Service() {
             Notification.Builder(this)
                 .setContentTitle("灵爪悬浮面板")
                 .setContentText("悬浮快捷面板运行中")
-                .setSmallIcon(android.R.drawable.ic_menu_compass)
+                .setSmallIcon(com.mobileclaw.app.R.drawable.ic_notification)
                 .setOngoing(true)
                 .build()
         }

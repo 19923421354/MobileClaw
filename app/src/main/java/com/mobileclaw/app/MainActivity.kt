@@ -4,9 +4,11 @@ import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
 import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.lifecycle.lifecycleScope
 import java.io.File
 import com.mobileclaw.app.ai.Recording
@@ -64,6 +66,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AppCompatDelegate.setDefaultNightMode(getCurrentThemeMode())
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -205,6 +208,88 @@ class MainActivity : AppCompatActivity() {
                     "• 执行 ls 命令查看目录\n" +
                     "• 安装这个 APK 文件"
         ))
+
+        // 空状态快捷建议
+        setupEmptyStateSuggestions()
+
+        // 监听消息列表变化，自动切换空状态显示
+        chatAdapter.registerAdapterDataObserver(object : androidx.recyclerview.widget.RecyclerView.AdapterDataObserver() {
+            override fun onChanged() = toggleEmptyState()
+            override fun onItemRangeInserted(positionStart: Int, itemCount: Int) = toggleEmptyState()
+            override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) = toggleEmptyState()
+        })
+    }
+
+    /**
+     * 设置空状态快捷建议芯片。
+     * 消息列表为空时显示可点击的指令芯片，点击后自动发送对应命令。
+     */
+    private fun setupEmptyStateSuggestions() {
+        val suggestions = listOf(
+            "打开微信" to "打开微信",
+            "打开设置" to "打开设置",
+            "截屏" to "截个屏",
+            "清理内存" to "清理内存",
+            "查看天气" to "查看天气"
+        )
+
+        suggestions.forEach { (label, command) ->
+            val chip = createSuggestionChip(label, command)
+            binding.layoutSuggestionChips.addView(chip)
+        }
+
+        // 初始检查空状态
+        toggleEmptyState()
+    }
+
+    /**
+     * 创建一个快捷建议芯片（MaterialCardView 样式）。
+     */
+    private fun createSuggestionChip(label: String, command: String): android.view.View {
+        val cardView = com.google.android.material.card.MaterialCardView(this).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+            val marginLp = layoutParams as ViewGroup.MarginLayoutParams
+            marginLp.setMargins(
+                resources.getDimensionPixelSize(R.dimen.chip_margin_start),
+                0,
+                resources.getDimensionPixelSize(R.dimen.chip_margin_end),
+                resources.getDimensionPixelSize(R.dimen.chip_margin_bottom)
+            )
+            radius = resources.getDimensionPixelSize(R.dimen.chip_corner_radius).toFloat()
+            cardElevation = 0f
+            setCardBackgroundColor(resources.getColor(R.color.chip_bg, theme))
+            strokeWidth = 0
+            isClickable = true
+            isFocusable = true
+            setPadding(
+                resources.getDimensionPixelSize(R.dimen.chip_padding_horizontal),
+                resources.getDimensionPixelSize(R.dimen.chip_padding_vertical),
+                resources.getDimensionPixelSize(R.dimen.chip_padding_horizontal),
+                resources.getDimensionPixelSize(R.dimen.chip_padding_vertical)
+            )
+            setOnClickListener { sendMessage(command) }
+        }
+
+        val textView = android.widget.TextView(this).apply {
+            text = label
+            textSize = 13f
+            setTextColor(resources.getColor(R.color.chip_text_color, theme))
+            gravity = android.view.Gravity.CENTER
+        }
+        cardView.addView(textView)
+
+        return cardView
+    }
+
+    /**
+     * 根据消息列表是否为空切换空状态建议的可见性。
+     */
+    private fun toggleEmptyState() {
+        binding.layoutEmptyState.visibility =
+            if (chatAdapter.itemCount == 0) android.view.View.VISIBLE else android.view.View.GONE
     }
 
     private fun setupClickListeners() {
@@ -283,6 +368,16 @@ class MainActivity : AppCompatActivity() {
         // 命令历史按钮
         binding.btnHistory.setOnClickListener {
             showCommandHistoryDialog()
+        }
+
+        // 清空对话按钮
+        binding.btnClearChat.setOnClickListener {
+            showClearChatDialog()
+        }
+
+        // 导出对话按钮
+        binding.btnExportChat.setOnClickListener {
+            exportChat()
         }
     }
 
@@ -850,6 +945,23 @@ class MainActivity : AppCompatActivity() {
         switchPipelineOptimization.isChecked = prefs.getBoolean("pipeline_optimization", true)
         switchEnhancedFeedback.isChecked = prefs.getBoolean("enhanced_feedback", true)
 
+        // 主题选择
+        val radioGroupTheme = dialogView.findViewById<android.widget.RadioGroup>(R.id.radioGroupTheme)
+        val currentTheme = getCurrentThemeMode()
+        when (currentTheme) {
+            AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM -> radioGroupTheme.check(R.id.radioThemeFollowSystem)
+            AppCompatDelegate.MODE_NIGHT_NO -> radioGroupTheme.check(R.id.radioThemeLight)
+            AppCompatDelegate.MODE_NIGHT_YES -> radioGroupTheme.check(R.id.radioThemeDark)
+        }
+        radioGroupTheme.setOnCheckedChangeListener { _, checkedId ->
+            val themeMode = when (checkedId) {
+                R.id.radioThemeLight -> AppCompatDelegate.MODE_NIGHT_NO
+                R.id.radioThemeDark -> AppCompatDelegate.MODE_NIGHT_YES
+                else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+            }
+            applyTheme(themeMode)
+        }
+
         // 设置页底部按钮：检查更新
         dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnCheckUpdate)?.setOnClickListener {
             checkForUpdatesManual()
@@ -889,6 +1001,7 @@ class MainActivity : AppCompatActivity() {
                     .putBoolean("proactive_analysis", switchProactiveAnalysis.isChecked)
                     .putBoolean("pipeline_optimization", switchPipelineOptimization.isChecked)
                     .putBoolean("enhanced_feedback", switchEnhancedFeedback.isChecked)
+                    .putInt("theme_mode", getCurrentThemeMode())
                     .apply()
 
                 // 同步到主界面的开关
@@ -930,6 +1043,18 @@ class MainActivity : AppCompatActivity() {
                 showStatsDialog()
             }
             .show()
+    }
+
+    private fun applyTheme(themeMode: Int) {
+        AppCompatDelegate.setDefaultNightMode(themeMode)
+        getSharedPreferences("mobileclaw", MODE_PRIVATE).edit()
+            .putInt("theme_mode", themeMode)
+            .apply()
+    }
+
+    private fun getCurrentThemeMode(): Int {
+        return getSharedPreferences("mobileclaw", MODE_PRIVATE)
+            .getInt("theme_mode", AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
     }
 
     /**
@@ -2443,5 +2568,110 @@ class MainActivity : AppCompatActivity() {
             .setView(rootLayout)
             .setPositiveButton("好的", null)
             .show()
+    }
+
+    // =========================================================================
+    //  对话管理
+    // =========================================================================
+
+    /**
+     * 显示清空对话确认对话框。
+     * 确认后清空所有聊天消息（包括欢迎消息）。
+     */
+    private fun showClearChatDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("清空对话")
+            .setMessage("确定要清空所有对话记录吗？\n\n此操作不可撤销，所有消息将被永久删除。")
+            .setPositiveButton("清空") { _, _ ->
+                chatAdapter.clear()
+                // 重新显示欢迎消息
+                chatAdapter.addMessage(ChatMessage(
+                    type = ChatMessage.TYPE_AI,
+                    content = "对话已清空，有什么可以帮你的？"
+                ))
+                showToast("对话已清空")
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    /**
+     * 导出对话记录到文本文件。
+     * 保存到下载目录，文件名格式：MobileClaw_对话记录_2024-01-01_14-30.txt
+     */
+    private fun exportChat() {
+        val messages = chatAdapter.getAllMessages()
+        if (messages.isEmpty()) {
+            showToast("暂无对话记录可导出")
+            return
+        }
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val dateStr = java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm", java.util.Locale.getDefault())
+                    .format(java.util.Date())
+                val fileName = "MobileClaw_对话记录_$dateStr.txt"
+
+                // 构建导出内容
+                val sb = StringBuilder()
+                sb.appendLine("灵爪 MobileClaw 对话记录")
+                sb.appendLine("导出时间: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}")
+                sb.appendLine("版本: ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})")
+                sb.appendLine("=" .repeat(50))
+                sb.appendLine()
+
+                for (msg in messages) {
+                    val time = com.mobileclaw.app.adapter.recyclerview.ChatMessage.formatTimestamp(msg.timestamp)
+                    when (msg.type) {
+                        com.mobileclaw.app.adapter.recyclerview.ChatMessage.TYPE_USER -> {
+                            sb.appendLine("👤 [你] $time")
+                        }
+                        com.mobileclaw.app.adapter.recyclerview.ChatMessage.TYPE_AI -> {
+                            sb.appendLine("🤖 [灵爪] $time")
+                        }
+                    }
+                    sb.appendLine(msg.content)
+                    sb.appendLine()
+                }
+
+                sb.appendLine("=" .repeat(50))
+                sb.appendLine("导出完毕")
+
+                // 保存到下载目录
+                val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(
+                    android.os.Environment.DIRECTORY_DOWNLOADS
+                )
+                val exportFile = File(downloadsDir, fileName)
+                exportFile.writeText(sb.toString(), java.nio.charset.StandardCharsets.UTF_8)
+
+                runOnUiThread {
+                    showToast("对话已导出到: $fileName")
+                    // 弹出分享/打开选择
+                    try {
+                        val uri = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                            androidx.core.content.FileProvider.getUriForFile(
+                                this@MainActivity,
+                                "$packageName.fileprovider",
+                                exportFile
+                            )
+                        } else {
+                            android.net.Uri.fromFile(exportFile)
+                        }
+                        val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        startActivity(android.content.Intent.createChooser(shareIntent, "分享对话记录"))
+                    } catch (e: Exception) {
+                        // 分享失败也不要紧，文件已保存
+                    }
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    showToast("导出失败: ${e.message?.take(50)}")
+                }
+            }
+        }
     }
 }

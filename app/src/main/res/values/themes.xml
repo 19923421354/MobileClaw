@@ -2,7 +2,7 @@
     <!-- ================================================================ -->
     <!-- 主主题：Material Design 3 (Material You) + 蓝紫渐变品牌色         -->
     <!-- ================================================================ -->
-    <style name="Theme.MobileClaw" parent="Theme.Material3.Light.NoActionBar">
+    <style name="Theme.MobileClaw" parent="Theme.Material3.DayNight.NoActionBar">
         <!-- 品牌色 - 蓝紫渐变主色 -->
         <item name="colorPrimary">#FF667EEA</item>
         <item name="colorOnPrimary">#FFFFFFFF</item>
@@ -129,6 +129,10 @@
 
     <!-- 图标深蓝色 -->
     <color name="icon_deep_blue">#FF0A1929</color>
+
+    <!-- 空状态建议芯片 -->
+    <color name="chip_bg">#FFF0F4FF</color>
+    <color name="chip_text_color">#FF667EEA</color>
 
     <!-- 渐变数组（用于代码中创建 GradientDrawable） -->
     <array name="brand_gradient_colors">
