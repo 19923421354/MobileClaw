@@ -1,6 +1,6 @@
 {
-  "version": "2.4.1",
-  "versionCode": 39,
-  "releaseUrl": "https://github.com/19923421354/MobileClaw/releases/tag/v2.4.1",
-  "changelog": "🔥 v2.4.1 紧急修复：更新下载卡在「准备下载」的问题\n\n🐛 关键 Bug 修复：\n1. 🛠️ 修复 jsDelivr CDN 镜像 URL 错误：路径指向 app/build/outputs/... 导致文件不存在，下载永远卡在「准备下载」\n2. 🛠️ 修正为正确的仓库 releases/ 目录路径，同时新增 gh-proxy.com 反向代理作为第三备用源\n3. 🛠️ 更新 User-Agent 版本号，确保服务器兼容\n\n🚀 v2.4.0 已有功能（模型下载加速）：\n4. ⚡ hf-mirror.com 国内镜像：模型下载不再被墙，自动 Fallback 到 HuggingFace\n5. ⚡ 4 连接并发分块下载：HTTP Range 将模型文件切成 4 块同时下载，突破单连接限速\n6. ⚡ 智能降级：不支持 Range 时自动切回单线程 + 断点续传\n\n🎨 全新图标 & UI：\n7. 🎯 全新生成式 AI 科技图标：蓝紫渐变数字爪形\n8. 🎨 Material Design 3 主题全面升级\n\n---\n开源协议: Apache 2.0 | 完全开源 | 仓库: https://github.com/19923421354/MobileClaw"
+  "version": "2.5.0",
+  "versionCode": 40,
+  "releaseUrl": "https://github.com/19923421354/MobileClaw/releases/tag/v2.5.0",
+  "changelog": "🔥 v2.5.0 重大更新：本地模型下载修复 + 全新 UI 界面\n\n🚀 本地模型下载修复：\n1. ⚡ 添加国内镜像优先策略：下载模型时自动先尝试 hf-mirror.com，失败后回退 huggingface.co\n2. ⚡ 修复「未知」状态：探测远程文件大小，不再显示「未知」\n3. ⚡ 支持断点续传：临时文件自动续传\n\n🎯 更多模型选择：\n4. 🆕 新增 Qwen2.5-Coder-0.5B（代码模型，约 420MB）\n5. 🆕 新增 DeepSeek-Coder-1.3B（代码模型，约 890MB）\n6. 🆕 新增 Qwen2.5-7B（Q4_K_M，约 4.1GB，旗舰模型）\n7. 🔍 搜索功能：按模型名称/描述实时搜索过滤\n8. 🏷️ 分类筛选：全部 / 推荐 / 代码 / 轻量 分类标签\n\n🎨 UI 全面升级：\n9. 📱 Material Design 3 风格：全新搜索栏、Chip 分类标签\n10. 🎨 渐变状态卡片：紫色渐变背景，更现代\n11. 📊 实时进度条：下载按钮点击后立即显示 LinearProgressIndicator\n12. ✨ 平滑动画：进度条 ValueAnimator 过渡动画\n\n---\n开源协议: Apache 2.0 | 完全开源 | 仓库: https://github.com/19923421354/MobileClaw"
 }
