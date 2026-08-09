@@ -1,6 +1,6 @@
 {
-  "version": "2.4.0",
-  "versionCode": 38,
-  "releaseUrl": "https://github.com/19923421354/MobileClaw/releases/tag/v2.4.0",
-  "changelog": "🔥 v2.4.0 更新内容：\n\n🚀 模型下载加速引擎 v4 — 国内镜像 + 并行分块下载：\n1. ⚡ 新增 hf-mirror.com 国内镜像：模型下载不再被墙，自动 Fallback 到 HuggingFace\n2. ⚡ 4 连接并发分块下载：HTTP Range 将模型文件切成 4 块同时下载，突破单连接限速\n3. ⚡ 智能降级：不支持 Range 时自动切回单线程 + 断点续传\n\n🎨 全新应用图标 v4 — AI 科技风格：\n4. 🎯 全新生成式 AI 科技图标：蓝紫渐变数字爪形，极具科技感与辨识度\n\n✨ UI 全面升级 v3 — Material Design 3 风格：\n5. 🎨 全面升级 Material Design 3 主题：蓝紫渐变品牌色 + Dynamic Color 支持\n6. 🎨 主界面优化：圆角品牌徽标、ChipGroup 模式开关、圆角快捷操作栏\n7. 🎨 模型管理界面优化：统计卡片带图标、渐变背景模型卡片、下拉刷新\n8. 🎨 状态栏/导航栏透明 + 浅色模式\n9. 🎨 修复所有界面 bug：解构声明错误、资源冲突、图标显示问题\n\n---\n开源协议: Apache 2.0 | 完全开源 | 仓库: https://github.com/19923421354/MobileClaw"
+  "version": "2.4.1",
+  "versionCode": 39,
+  "releaseUrl": "https://github.com/19923421354/MobileClaw/releases/tag/v2.4.1",
+  "changelog": "🔥 v2.4.1 紧急修复：更新下载卡在"准备下载"的问题\n\n🐛 关键 Bug 修复：\n1. 🛠️ 修复 jsDelivr CDN 镜像 URL 错误：路径指向 app/build/outputs/... 导致文件不存在，下载永远卡在"准备下载"\n2. 🛠️ 修正为正确的仓库 releases/ 目录路径，同时新增 gh-proxy.com 反向代理作为第三备用源\n3. 🛠️ 更新 User-Agent 版本号，确保服务器兼容\n\n🚀 v2.4.0 已有功能（模型下载加速）：\n4. ⚡ hf-mirror.com 国内镜像：模型下载不再被墙，自动 Fallback 到 HuggingFace\n5. ⚡ 4 连接并发分块下载：HTTP Range 将模型文件切成 4 块同时下载，突破单连接限速\n6. ⚡ 智能降级：不支持 Range 时自动切回单线程 + 断点续传\n\n🎨 全新图标 & UI：\n7. 🎯 全新生成式 AI 科技图标：蓝紫渐变数字爪形\n8. 🎨 Material Design 3 主题全面升级\n\n---\n开源协议: Apache 2.0 | 完全开源 | 仓库: https://github.com/19923421354/MobileClaw"
 }

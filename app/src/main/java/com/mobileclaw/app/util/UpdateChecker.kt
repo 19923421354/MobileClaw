@@ -160,7 +160,7 @@ object UpdateChecker {
 
             val request = Request.Builder()
                 .url(cacheBusterUrl)
-                .header("User-Agent", "MobileClaw/2.3.1")
+                .header("User-Agent", "MobileClaw/2.4.1")
                 .header("Cache-Control", "no-cache, no-store, must-revalidate")
                 .header("Pragma", "no-cache")
                 .header("Expires", "0")
@@ -225,7 +225,7 @@ object UpdateChecker {
 
             val request = Request.Builder()
                 .url(cacheBusterUrl)
-                .header("User-Agent", "MobileClaw/2.3.1")
+                .header("User-Agent", "MobileClaw/2.4.1")
                 .header("Cache-Control", "no-cache, no-store, must-revalidate")
                 .header("Pragma", "no-cache")
                 .header("Expires", "0")
@@ -490,24 +490,30 @@ object UpdateChecker {
      * 下载镜像列表。
      * 按优先级排列，依次尝试，不预测试。
      * 1. 直链 GitHub（官方源，海外/有梯子时最快）
-     * 2. jsDelivr CDN（全球 CDN，国内有节点，速度快，不限速）
-     * 3. 移除 mirror.ghproxy.com（该代理对免费用户限速 ~50KB/s）
+     * 2. jsDelivr CDN（全球 CDN，国内可访问，速度快，不限速）
+     *    注意：需将 APK 文件放入仓库 releases/ 目录下
+     * 3. gh-proxy 代理（国内备用，通过反向代理访问 GitHub Release）
+     * 4. 移除 mirror.ghproxy.com（该代理对免费用户限速 ~50KB/s）
      */
     private val DOWNLOAD_MIRRORS = listOf(
         // 1. 直接 GitHub 下载（官方源，海外/有梯子时最快）
         { url: String -> url },
-        // 2. jsDelivr CDN 镜像（全球 CDN，国内速度好，不限速）
-        //    GitHub Release 的 APK 可以通过 jsDelivr 的 gh 路径加速
+        // 2. jsDelivr CDN 镜像（国内可访问，速度快）
+        //    仓库 releases/ 目录下的 APK 文件通过 jsDelivr CDN 加速
         { url: String ->
-            // 将 GitHub Release URL 转为 jsDelivr CDN URL
             val ghMatch = Regex("https://github\\.com/([^/]+)/([^/]+)/releases/download/v[^/]+/(.+)")
                 .find(url)
             if (ghMatch != null) {
                 val owner = ghMatch.groupValues[1]
                 val repo = ghMatch.groupValues[2]
                 val filename = ghMatch.groupValues[3]
-                "https://cdn.jsdelivr.net/gh/$owner/$repo@main/app/build/outputs/apk/release/app-release.apk"
+                // 正确路径：仓库根目录下的 releases/ 文件夹
+                "https://cdn.jsdelivr.net/gh/$owner/$repo@main/releases/$filename"
             } else url
+        },
+        // 3. gh-proxy 反向代理（国内备用，不限速）
+        { url: String ->
+            "https://gh-proxy.com/$url"
         }
     )
 
@@ -638,7 +644,7 @@ object UpdateChecker {
         try {
             val request = Request.Builder()
                 .url(url)
-                .header("User-Agent", "MobileClaw/2.3.1")
+                .header("User-Agent", "MobileClaw/2.4.1")
                 .head()
                 .build()
 
@@ -657,7 +663,7 @@ object UpdateChecker {
                 // 用重定向 URL 再探测一次
                 val redirectRequest = Request.Builder()
                     .url(location)
-                    .header("User-Agent", "MobileClaw/2.3.1")
+                    .header("User-Agent", "MobileClaw/2.4.1")
                     .head()
                     .build()
                 val redirectResponse = probeClient.newCall(redirectRequest).execute()
@@ -775,7 +781,7 @@ object UpdateChecker {
 
             val request = Request.Builder()
                 .url(url)
-                .header("User-Agent", "MobileClaw/2.3.1")
+                .header("User-Agent", "MobileClaw/2.4.1")
                 .header("Accept", "application/octet-stream")
                 .header("Range", rangeHeader)
                 .build()
@@ -848,7 +854,7 @@ object UpdateChecker {
 
             val request = Request.Builder()
                 .url(url)
-                .header("User-Agent", "MobileClaw/2.3.1")
+                .header("User-Agent", "MobileClaw/2.4.1")
                 .header("Accept", "application/octet-stream")
                 .build()
 
