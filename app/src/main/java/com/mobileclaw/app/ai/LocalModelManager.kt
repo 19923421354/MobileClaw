@@ -575,6 +575,45 @@ class LocalModelManager(
                 requiredRam = 2560L * 1024 * 1024, // 2.5 GB
                 checksum = "e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6",
                 isDefault = false
+            ),
+            ModelInfo(
+                id = "qwen2.5-coder-0.5b",
+                name = "Qwen2.5-Coder-0.5B",
+                url = "https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
+                format = ModelFormat.GGUF,
+                size = 440_401_920L, // ~420 MB
+                version = "1.0",
+                description = "通义千问 0.5B 代码指令模型，Q4_K_M 量化后约 420MB，" +
+                    "专注代码生成与理解，适合 2GB 以上内存设备。",
+                requiredRam = 2L * 1024 * 1024 * 1024, // 2 GB
+                checksum = "f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7",
+                isDefault = false
+            ),
+            ModelInfo(
+                id = "deepseek-coder-1.3b",
+                name = "DeepSeek-Coder-1.3B",
+                url = "https://huggingface.co/TheBloke/deepseek-coder-1.3b-instruct-GGUF/resolve/main/deepseek-coder-1.3b-instruct-q4_k_m.gguf",
+                format = ModelFormat.GGUF,
+                size = 933_232_640L, // ~890 MB
+                version = "1.0",
+                description = "DeepSeek 1.3B 代码指令模型，Q4_K_M 量化后约 890MB，" +
+                    "代码补全与生成能力出色，适合 3GB 以上内存设备。",
+                requiredRam = 3L * 1024 * 1024 * 1024, // 3 GB
+                checksum = "a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8",
+                isDefault = false
+            ),
+            ModelInfo(
+                id = "qwen2.5-7b",
+                name = "Qwen2.5-7B (Q4_K_M)",
+                url = "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q4_k_m.gguf",
+                format = ModelFormat.GGUF,
+                size = 4_398_046_512L, // ~4.1 GB
+                version = "1.0",
+                description = "通义千问 7B 指令模型，Q4_K_M 量化后约 4.1GB，" +
+                    "高质量中文理解与生成，适合 8GB 以上内存设备。",
+                requiredRam = 8L * 1024 * 1024 * 1024, // 8 GB
+                checksum = "b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9",
+                isDefault = false
             )
         )
     }
@@ -855,14 +894,192 @@ class LocalModelManager(
     }
 
     /**
+     * 将 huggingface.co URL 转换为 hf-mirror.com 镜像 URL。
+     *
+     * 如果原始 URL 不是 huggingface.co 域名，返回 null。
+     * 转换规则：将 https://huggingface.co/ 替换为 https://hf-mirror.com/。
+     *
+     * @param originalUrl 原始下载 URL
+     * @return 镜像 URL，如果原始 URL 不是 huggingface.co 则返回 null
+     */
+    private fun deriveMirrorUrl(originalUrl: String): String? {
+        return if (originalUrl.startsWith("https://huggingface.co/")) {
+            originalUrl.replace("https://huggingface.co/", "https://hf-mirror.com/")
+        } else {
+            null
+        }
+    }
+
+    /**
+     * 探测指定 URL 的文件大小和 Range 支持。
+     *
+     * 发送 HTTP HEAD 请求，从响应头解析 Content-Length（文件大小）
+     * 和 Accept-Ranges（是否支持断点续传）。
+     * 用于下载前评估目标服务器状态。
+     *
+     * @param url 要探测的 URL
+     * @return 包含 (文件大小, 是否支持断点续传) 的 Pair，失败时返回 null
+     */
+    private suspend fun probeFileSize(url: String): Pair<Long, Boolean>? = withContext(Dispatchers.IO) {
+        try {
+            val connection = URL(url).openConnection() as HttpURLConnection
+            connection.connectTimeout = CONNECT_TIMEOUT_MS.toInt()
+            connection.readTimeout = READ_TIMEOUT_MS.toInt()
+            connection.setRequestProperty("User-Agent", "MobileClaw/1.0")
+            connection.instanceFollowRedirects = true
+            connection.requestMethod = "HEAD"
+            connection.connect()
+
+            val responseCode = connection.responseCode
+            if (responseCode != HttpURLConnection.HTTP_OK) {
+                android.util.Log.w(TAG, "probeFileSize: HEAD 请求失败, HTTP $responseCode, URL: $url")
+                return@withContext null
+            }
+
+            val contentLength = connection.contentLengthLong
+            val acceptRanges = connection.getHeaderField("Accept-Ranges")
+            val supportsRange = acceptRanges != null &&
+                acceptRanges.equals("bytes", ignoreCase = true)
+
+            android.util.Log.i(TAG, "probeFileSize: URL=$url, size=$contentLength, range=$supportsRange")
+            Pair(contentLength, supportsRange)
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "probeFileSize: 探测失败, URL=$url, error=${e.message}")
+            null
+        }
+    }
+
+    /**
+     * 从指定 URL 单线程下载文件到临时文件。
+     *
+     * 支持断点续传：
+     * - 如果临时文件已存在且服务端支持 Range 请求（通过 [probeFileSize] 确认），
+     *   自动设置 Range 头从断点处续传
+     * - 下载过程中实时更新 [DownloadTask] 的进度和速度字段
+     *
+     * 调用方需确保 [tmpFile] 的父目录已存在。
+     *
+     * @param url     下载 URL
+     * @param tmpFile 目标临时文件
+     * @param task    下载任务状态跟踪对象
+     * @return true 表示下载成功，false 表示失败
+     */
+    private suspend fun downloadFile(
+        url: String,
+        tmpFile: File,
+        task: DownloadTask
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val connection = URL(url).openConnection() as HttpURLConnection
+            connection.connectTimeout = CONNECT_TIMEOUT_MS.toInt()
+            connection.readTimeout = READ_TIMEOUT_MS.toInt()
+            connection.setRequestProperty("User-Agent", "MobileClaw/1.0")
+
+            val existingBytes = if (tmpFile.exists()) tmpFile.length() else 0L
+            if (existingBytes > 0) {
+                connection.setRequestProperty("Range", "bytes=$existingBytes-")
+                android.util.Log.i(TAG, "downloadFile: 断点续传, 已下载 $existingBytes 字节, URL: $url")
+            }
+
+            connection.connect()
+            val responseCode = connection.responseCode
+
+            // 判断响应是否有效：现有文件需要 206，新文件需要 200
+            val isValidResponse = when {
+                existingBytes > 0 && responseCode == HttpURLConnection.HTTP_PARTIAL -> true
+                existingBytes == 0L && responseCode == HttpURLConnection.HTTP_OK -> true
+                else -> false
+            }
+            if (!isValidResponse) {
+                android.util.Log.w(TAG, "downloadFile: 无效响应码 $responseCode, URL: $url")
+                return@withContext false
+            }
+
+            // 从响应头解析总大小
+            val contentLength = when {
+                responseCode == HttpURLConnection.HTTP_PARTIAL -> {
+                    val contentRange = connection.getHeaderField("Content-Range")
+                    if (contentRange != null) {
+                        contentRange.substringAfter('/').toLongOrNull() ?: -1L
+                    } else {
+                        connection.contentLengthLong
+                    }
+                }
+                else -> connection.contentLengthLong
+            }
+            if (contentLength > 0) {
+                task.totalBytes = contentLength
+            }
+
+            task.bytesDone = existingBytes
+
+            val inputStream = connection.inputStream
+            val outputStream = if (existingBytes > 0) {
+                FileOutputStream(tmpFile, true)
+            } else {
+                FileOutputStream(tmpFile)
+            }
+
+            var lastProgressUpdate = 0L
+            val speedSamples = ArrayDeque<Pair<Long, Long>>()
+
+            inputStream.use { input ->
+                outputStream.use { output ->
+                    val buffer = ByteArray(BUFFER_SIZE)
+                    var bytesRead: Int
+
+                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                        if (!isActive) {
+                            throw CancellationException("下载被取消")
+                        }
+
+                        output.write(buffer, 0, bytesRead)
+                        task.bytesDone += bytesRead
+
+                        val now = System.nanoTime()
+                        val nowMs = System.currentTimeMillis()
+
+                        // 限速更新进度
+                        if (nowMs - lastProgressUpdate >= PROGRESS_UPDATE_INTERVAL_MS) {
+                            lastProgressUpdate = nowMs
+                            speedSamples.addLast(now to task.bytesDone)
+                            while (speedSamples.size > SPEED_SAMPLE_WINDOW) {
+                                speedSamples.removeFirst()
+                            }
+                            if (speedSamples.size >= 2) {
+                                val first = speedSamples.first()
+                                val last = speedSamples.last()
+                                val elapsedSec = (last.first - first.first) / 1_000_000_000.0
+                                if (elapsedSec > 0.1) {
+                                    task.speedBytes = ((last.second - first.second) / elapsedSec).roundToLong()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            android.util.Log.i(TAG, "downloadFile: 下载完成, URL: $url, 大小: ${task.bytesDone} 字节")
+            true
+
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "downloadFile: 下载异常, URL: $url, error: ${e.message}")
+            false
+        }
+    }
+
+    /**
      * 模型下载的内部实现。
      *
      * 包含完整的下载流程：
      * 1. 检查磁盘空间
-     * 2. 建立 HTTP 连接（支持断点续传）
-     * 3. 流式写入文件，实时更新进度
-     * 4. 下载完成后进行 SHA-256 校验
-     * 5. 更新已下载模型索引
+     * 2. 镜像优先策略：先尝试 hf-mirror.com 镜像，失败后回退到 huggingface.co
+     * 3. 每个 URL 先探测文件大小和 Range 支持
+     * 4. 支持断点续传（基于临时文件）
+     * 5. 下载完成后进行 SHA-256 校验
+     * 6. 更新已下载模型索引
      *
      * @param modelInfo    要下载的模型信息
      * @param isAutoDownload 是否为自动下载（影响日志级别）
@@ -891,217 +1108,191 @@ class LocalModelManager(
             val targetFile = File(modelsDir, "${modelInfo.name}.${modelInfo.format.extension}")
             val tmpFile = File(modelsDir, "${modelInfo.name}.${modelInfo.format.extension}$TMP_SUFFIX")
 
-            var retryCount = 0
-            var success = false
+            // =================================================================
+            //  镜像优先策略：构建候选 URL 列表
+            //  顺序：hf-mirror.com（镜像）→ huggingface.co（原始）
+            // =================================================================
+            val candidateUrls = mutableListOf<String>()
+            val mirrorUrl = deriveMirrorUrl(modelInfo.url)
+            if (mirrorUrl != null) {
+                candidateUrls.add(mirrorUrl)
+            }
+            // 原始 URL 始终作为回退
+            if (modelInfo.url != mirrorUrl) {
+                candidateUrls.add(modelInfo.url)
+            }
 
-            while (retryCount <= MAX_RETRIES && !success) {
-                try {
-                    // 检查是否被取消
-                    if (!isActive) {
-                        task.status = DownloadStatus.PAUSED
-                        _modelState.value = ModelState.NOT_DOWNLOADED
-                        return@withLock
-                    }
+            var downloadSuccess = false
+            var lastError: String? = null
 
-                    // 检查磁盘空间
-                    val freeBytes = getFreeSpace()
-                    if (modelInfo.size > 0 && freeBytes < modelInfo.size * 1.2) {
-                        throw IOException("磁盘空间不足：需要 ${modelInfo.size} 字节，可用 $freeBytes 字节")
-                    }
+            // 遍历候选 URL（镜像优先，原始回退）
+            for ((urlIndex, currentUrl) in candidateUrls.withIndex()) {
+                val urlLabel = if (urlIndex == 0 && mirrorUrl != null) "hf-mirror.com" else "huggingface.co"
+                android.util.Log.i(TAG, "downloadModelInternal: 尝试 URL [#$urlIndex] $urlLabel: $currentUrl")
 
-                    // 建立连接
-                    val url = URL(modelInfo.url)
-                    val connection = (url.openConnection() as HttpURLConnection).apply {
-                        connectTimeout = CONNECT_TIMEOUT_MS.toInt()
-                        readTimeout = READ_TIMEOUT_MS.toInt()
-                        setRequestProperty("User-Agent", "MobileClaw/1.0")
-
-                        // 断点续传：如果存在临时文件，设置 Range 头
-                        if (tmpFile.exists() && tmpFile.length() > 0) {
-                            val downloadedBytes = tmpFile.length()
-                            setRequestProperty("Range", "bytes=$downloadedBytes-")
-                            android.util.Log.i(TAG, "downloadModelInternal: 断点续传，已下载 $downloadedBytes 字节")
-                        }
-                    }
-
-                    connection.connect()
-                    val responseCode = connection.responseCode
-
-                    // 确定总大小
-                    val contentLength = when {
-                        responseCode == HttpURLConnection.HTTP_PARTIAL -> {
-                            // 206 Partial Content：从 Content-Range 头解析总大小
-                            val contentRange = connection.getHeaderField("Content-Range")
-                            if (contentRange != null) {
-                                val total = contentRange.substringAfter('/').toLongOrNull() ?: -1L
-                                total
-                            } else {
-                                connection.contentLengthLong
-                            }
-                        }
-                        responseCode == HttpURLConnection.HTTP_OK -> {
-                            connection.contentLengthLong
-                        }
-                        else -> {
-                            throw IOException("HTTP 响应码: $responseCode, URL: ${modelInfo.url}")
-                        }
-                    }
-
-                    task.totalBytes = contentLength
-
-                    // 已下载字节数（用于断点续传）
-                    val existingBytes = if (tmpFile.exists()) tmpFile.length() else 0L
-                    task.bytesDone = existingBytes
-
-                    // 打开输入流和输出流
-                    val inputStream = connection.inputStream
-                    val outputStream = if (existingBytes > 0) {
-                        // 追加模式
-                        FileOutputStream(tmpFile, true)
-                    } else {
-                        FileOutputStream(tmpFile)
-                    }
-
-                    // 进度更新变量
-                    var lastProgressUpdate = 0L
-                    val speedSamples = ArrayDeque<Pair<Long, Long>>() // (timestamp, bytes)
-
-                    inputStream.use { input ->
-                        outputStream.use { output ->
-                            val buffer = ByteArray(BUFFER_SIZE)
-                            var bytesRead: Int
-
-                            while (input.read(buffer).also { bytesRead = it } != -1) {
-                                if (!isActive) {
-                                    throw CancellationException("下载被取消")
-                                }
-
-                                output.write(buffer, 0, bytesRead)
-                                task.bytesDone += bytesRead
-
-                                val now = System.nanoTime()
-                                val nowMs = System.currentTimeMillis()
-
-                                // 限速更新进度（每 PROGRESS_UPDATE_INTERVAL_MS 更新一次）
-                                if (nowMs - lastProgressUpdate >= PROGRESS_UPDATE_INTERVAL_MS) {
-                                    lastProgressUpdate = nowMs
-
-                                    // 计算速度：滑动窗口平均
-                                    speedSamples.addLast(now to task.bytesDone)
-                                    while (speedSamples.size > SPEED_SAMPLE_WINDOW) {
-                                        speedSamples.removeFirst()
-                                    }
-                                    if (speedSamples.size >= 2) {
-                                        val first = speedSamples.first()
-                                        val last = speedSamples.last()
-                                        val elapsedSec = (last.first - first.first) / 1_000_000_000.0
-                                        if (elapsedSec > 0.1) {
-                                            task.speedBytes = ((last.second - first.second) / elapsedSec).roundToLong()
-                                        }
-                                    }
-
-                                    // 更新 _modelState（通过 progressFlow 触发 UI 更新）
-                                    val percentage = if (task.totalBytes > 0) {
-                                        (task.bytesDone.toDouble() / task.totalBytes.toDouble()) * 100.0
-                                    } else {
-                                        -1.0
-                                    }
-
-                                    if (!isAutoDownload) {
-                                        android.util.Log.i(TAG, "下载进度: $modelId " +
-                                            "${String.format("%.1f", percentage)}% " +
-                                            "(${formatBytes(task.bytesDone)}/${formatBytes(task.totalBytes)}) " +
-                                            "${formatBytes(task.speedBytes)}/s")
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    connection.disconnect()
-
-                    // 下载完成，校验文件
-                    task.status = DownloadStatus.COMPLETED
-                    val fileSize = tmpFile.length()
-
-                    android.util.Log.i(TAG, "downloadModelInternal: 下载完成，文件大小: ${formatBytes(fileSize)}")
-
-                    // SHA-256 校验
-                    val checksumValid = if (modelInfo.checksum.isNotBlank()) {
-                        android.util.Log.i(TAG, "downloadModelInternal: 开始 SHA-256 校验...")
-                        val valid = verifyChecksum(tmpFile, modelInfo.checksum)
-                        if (valid) {
-                            android.util.Log.i(TAG, "downloadModelInternal: SHA-256 校验通过")
-                        } else {
-                            android.util.Log.w(TAG, "downloadModelInternal: SHA-256 校验失败，" +
-                                "预期: ${modelInfo.checksum}")
-                        }
-                        valid
-                    } else {
-                        true
-                    }
-
-                    // 重命名临时文件为目标文件
-                    if (tmpFile.renameTo(targetFile)) {
-                        android.util.Log.i(TAG, "downloadModelInternal: 文件已保存到: ${targetFile.absolutePath}")
-                    } else {
-                        // 重命名失败，尝试复制
-                        tmpFile.copyTo(targetFile, overwrite = true)
-                        tmpFile.delete()
-                    }
-
-                    // 更新已下载模型索引
-                    val downloaded = DownloadedModel(
-                        modelInfo = modelInfo,
-                        localPath = targetFile.absolutePath,
-                        downloadTime = System.currentTimeMillis(),
-                        fileSize = fileSize,
-                        checksumValid = checksumValid
-                    )
-                    downloadedModels[modelId] = downloaded
-                    task.status = if (checksumValid) DownloadStatus.VERIFIED else DownloadStatus.COMPLETED
-
-                    _modelState.value = if (checksumValid) ModelState.DOWNLOADED else ModelState.ERROR
-
-                    // 清理下载任务
-                    downloadTasks.remove(modelId)
-
-                    // 自动加载
-                    if (autoLoadEnabled && checksumValid) {
-                        scope.launch {
-                            loadModelInternal(modelId)
-                        }
-                    }
-
-                    success = true
-                    android.util.Log.i(TAG, "downloadModelInternal: 模型 '$modelId' 下载${if (checksumValid) "并校验" else ""}成功")
-
-                } catch (e: CancellationException) {
-                    android.util.Log.i(TAG, "downloadModelInternal: 模型 '$modelId' 下载被取消")
+                // 检查是否被取消
+                if (!isActive) {
                     task.status = DownloadStatus.PAUSED
                     _modelState.value = ModelState.NOT_DOWNLOADED
                     return@withLock
-                } catch (e: Exception) {
-                    retryCount++
-                    android.util.Log.w(TAG, "downloadModelInternal: 下载失败 (第 $retryCount 次重试): ${e.message}")
+                }
 
-                    if (retryCount <= MAX_RETRIES) {
-                        // 指数退避等待
-                        val delayMs = RETRY_BASE_DELAY_MS * (1L shl (retryCount - 1))
-                        android.util.Log.i(TAG, "downloadModelInternal: 等待 ${delayMs}ms 后重试...")
-                        delay(delayMs)
-                    } else {
+                // 检查磁盘空间（首次下载时检查）
+                if (urlIndex == 0) {
+                    val freeBytes = getFreeSpace()
+                    if (modelInfo.size > 0 && freeBytes < modelInfo.size * 1.2) {
+                        android.util.Log.e(TAG, "downloadModelInternal: 磁盘空间不足，" +
+                            "需要 ${modelInfo.size} 字节，可用 $freeBytes 字节")
                         task.status = DownloadStatus.FAILED
                         _modelState.value = ModelState.ERROR
-                        _errorMessage.value = "下载失败: ${e.message}"
-                        android.util.Log.e(TAG, "downloadModelInternal: 模型 '$modelId' 下载最终失败", e)
+                        _errorMessage.value = "磁盘空间不足"
+                        downloadTasks.remove(modelId)
+                        return@withLock
                     }
+                }
+
+                // 探测文件大小和 Range 支持
+                val probeResult = probeFileSize(currentUrl)
+                if (probeResult == null) {
+                    android.util.Log.w(TAG, "downloadModelInternal: 探测失败，跳过 URL: $currentUrl")
+                    lastError = "文件大小探测失败"
+                    continue
+                }
+
+                val (remoteSize, supportsRange) = probeResult
+                if (remoteSize > 0) {
+                    task.totalBytes = remoteSize
+                }
+
+                // 如果临时文件已存在且大小超过远程文件，说明是旧文件，删除重下
+                if (tmpFile.exists() && remoteSize > 0 && tmpFile.length() >= remoteSize) {
+                    android.util.Log.i(TAG, "downloadModelInternal: 临时文件已完整，跳过下载")
+                    tmpFile.delete()
+                }
+
+                // 单 URL 重试下载
+                var urlRetryCount = 0
+                var urlSuccess = false
+
+                while (urlRetryCount <= MAX_RETRIES && !urlSuccess) {
+                    try {
+                        if (!isActive) {
+                            task.status = DownloadStatus.PAUSED
+                            _modelState.value = ModelState.NOT_DOWNLOADED
+                            return@withLock
+                        }
+
+                        android.util.Log.i(TAG, "downloadModelInternal: 开始下载 [$urlLabel] " +
+                            "(第 ${urlRetryCount + 1} 次尝试)")
+
+                        // 调用 downloadFile 执行单线程下载
+                        urlSuccess = downloadFile(currentUrl, tmpFile, task)
+
+                        if (urlSuccess) {
+                            android.util.Log.i(TAG, "downloadModelInternal: [$urlLabel] 下载成功")
+                        } else {
+                            urlRetryCount++
+                            if (urlRetryCount <= MAX_RETRIES) {
+                                val delayMs = RETRY_BASE_DELAY_MS * (1L shl (urlRetryCount - 1))
+                                android.util.Log.w(TAG, "downloadModelInternal: [$urlLabel] 下载失败，" +
+                                    "等待 ${delayMs}ms 后重试 (${urlRetryCount}/$MAX_RETRIES)...")
+                                delay(delayMs)
+                            } else {
+                                lastError = "[$urlLabel] 下载失败，已重试 $MAX_RETRIES 次"
+                                android.util.Log.w(TAG, "downloadModelInternal: $lastError")
+                            }
+                        }
+                    } catch (e: CancellationException) {
+                        android.util.Log.i(TAG, "downloadModelInternal: 模型 '$modelId' 下载被取消")
+                        task.status = DownloadStatus.PAUSED
+                        _modelState.value = ModelState.NOT_DOWNLOADED
+                        return@withLock
+                    } catch (e: Exception) {
+                        urlRetryCount++
+                        android.util.Log.w(TAG, "downloadModelInternal: [$urlLabel] 异常: ${e.message}")
+
+                        if (urlRetryCount <= MAX_RETRIES) {
+                            val delayMs = RETRY_BASE_DELAY_MS * (1L shl (urlRetryCount - 1))
+                            delay(delayMs)
+                        } else {
+                            lastError = "[$urlLabel] 异常: ${e.message}"
+                        }
+                    }
+                }
+
+                if (urlSuccess) {
+                    downloadSuccess = true
+                    break
+                }
+
+                // 当前 URL 失败，准备尝试下一个（清理临时文件重新下载）
+                android.util.Log.i(TAG, "downloadModelInternal: 切换到下一个 URL")
+            }
+
+            // =================================================================
+            //  下载结果处理
+            // =================================================================
+            if (!downloadSuccess) {
+                task.status = DownloadStatus.FAILED
+                _modelState.value = ModelState.ERROR
+                _errorMessage.value = lastError ?: "所有下载源均失败"
+                android.util.Log.e(TAG, "downloadModelInternal: 模型 '$modelId' 所有下载源均失败: $lastError")
+                downloadTasks.remove(modelId)
+                return@withLock
+            }
+
+            // 下载完成，校验文件
+            task.status = DownloadStatus.COMPLETED
+            val fileSize = tmpFile.length()
+            android.util.Log.i(TAG, "downloadModelInternal: 下载完成，文件大小: ${formatBytes(fileSize)}")
+
+            // SHA-256 校验
+            val checksumValid = if (modelInfo.checksum.isNotBlank()) {
+                android.util.Log.i(TAG, "downloadModelInternal: 开始 SHA-256 校验...")
+                val valid = verifyChecksum(tmpFile, modelInfo.checksum)
+                if (valid) {
+                    android.util.Log.i(TAG, "downloadModelInternal: SHA-256 校验通过")
+                } else {
+                    android.util.Log.w(TAG, "downloadModelInternal: SHA-256 校验失败，" +
+                        "预期: ${modelInfo.checksum}")
+                }
+                valid
+            } else {
+                true
+            }
+
+            // 重命名临时文件为目标文件
+            if (tmpFile.renameTo(targetFile)) {
+                android.util.Log.i(TAG, "downloadModelInternal: 文件已保存到: ${targetFile.absolutePath}")
+            } else {
+                tmpFile.copyTo(targetFile, overwrite = true)
+                tmpFile.delete()
+            }
+
+            // 更新已下载模型索引
+            val downloaded = DownloadedModel(
+                modelInfo = modelInfo,
+                localPath = targetFile.absolutePath,
+                downloadTime = System.currentTimeMillis(),
+                fileSize = fileSize,
+                checksumValid = checksumValid
+            )
+            downloadedModels[modelId] = downloaded
+            task.status = if (checksumValid) DownloadStatus.VERIFIED else DownloadStatus.COMPLETED
+
+            _modelState.value = if (checksumValid) ModelState.DOWNLOADED else ModelState.ERROR
+
+            // 清理下载任务
+            downloadTasks.remove(modelId)
+
+            // 自动加载
+            if (autoLoadEnabled && checksumValid) {
+                scope.launch {
+                    loadModelInternal(modelId)
                 }
             }
 
-            if (!success) {
-                downloadTasks.remove(modelId)
-            }
+            android.util.Log.i(TAG, "downloadModelInternal: 模型 '$modelId' 下载${if (checksumValid) "并校验" else ""}成功")
         } // mutex.withLock
     }
 

@@ -6,7 +6,9 @@
     android:orientation="vertical"
     android:background="@color/bg_main">
 
-    <!-- ============ 顶部标题栏（渐变背景） ============ -->
+    <!-- ================================================================ -->
+    <!-- 顶部标题栏（Material Design 3 风格）                              -->
+    <!-- ================================================================ -->
     <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -23,12 +25,13 @@
             android:paddingHorizontal="14dp"
             android:paddingVertical="12dp">
 
+            <!-- 返回按钮 -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="40dp"
                 android:layout_height="40dp"
                 app:cardCornerRadius="12dp"
                 app:cardElevation="0dp"
-                app:cardBackgroundColor="#FFF0F4FF"
+                app:cardBackgroundColor="@color/brand_primary_light"
                 app:strokeWidth="0dp">
 
                 <ImageButton
@@ -42,6 +45,7 @@
                     android:contentDescription="返回" />
             </com.google.android.material.card.MaterialCardView>
 
+            <!-- 标题 -->
             <TextView
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
@@ -50,14 +54,16 @@
                 android:textSize="18sp"
                 android:textStyle="bold"
                 android:textColor="@color/text_primary"
-                android:gravity="center" />
+                android:gravity="center"
+                android:layout_marginHorizontal="8dp" />
 
+            <!-- 刷新按钮 -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="40dp"
                 android:layout_height="40dp"
                 app:cardCornerRadius="12dp"
                 app:cardElevation="0dp"
-                app:cardBackgroundColor="#FFF0F4FF"
+                app:cardBackgroundColor="@color/brand_primary_light"
                 app:strokeWidth="0dp">
 
                 <ImageButton
@@ -73,7 +79,149 @@
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
-    <!-- ============ 可滚动内容区（支持下拉刷新） ============ -->
+    <!-- ================================================================ -->
+    <!-- 搜索栏（Material Design 3 风格 Filled TextField）                 -->
+    <!-- ================================================================ -->
+    <com.google.android.material.card.MaterialCardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="12dp"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="4dp"
+        app:cardCornerRadius="28dp"
+        app:cardElevation="0dp"
+        app:cardBackgroundColor="@color/bg_input"
+        app:strokeWidth="0dp"
+        android:transitionName="searchBar">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="16dp"
+            android:paddingEnd="4dp"
+            android:paddingVertical="4dp">
+
+            <ImageView
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:src="@drawable/ic_action_search"
+                android:tint="@color/text_tertiary"
+                android:contentDescription="搜索" />
+
+            <EditText
+                android:id="@+id/editSearch"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="12dp"
+                android:layout_marginEnd="8dp"
+                android:background="@android:color/transparent"
+                android:inputType="text"
+                android:imeOptions="actionSearch"
+                android:singleLine="true"
+                android:hint="搜索模型名称..."
+                android:textSize="14sp"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_tertiary"
+                android:paddingVertical="10dp" />
+
+            <!-- 清除按钮（默认隐藏，代码中控制） -->
+            <ImageButton
+                android:id="@+id/btnClearSearch"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@drawable/ic_action_clean"
+                android:tint="@color/text_tertiary"
+                android:background="@android:color/transparent"
+                android:padding="6dp"
+                android:visibility="gone"
+                android:contentDescription="清除搜索" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- ================================================================ -->
+    <!-- 分类标签（Material Design 3 ChipGroup）                          -->
+    <!-- ================================================================ -->
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="12dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="4dp"
+        android:scrollbars="none"
+        android:fadeScrollbars="false">
+
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/chipGroupCategories"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            app:singleSelection="true"
+            app:selectionRequired="false"
+            app:chipSpacingHorizontal="8dp"
+            app:chipSpacingVertical="0dp">
+
+            <com.google.android.material.chip.Chip
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="全部"
+                style="@style/Widget.Material3.Chip.Filter"
+                app:chipBackgroundColor="@color/brand_primary_light"
+                app:chipStrokeWidth="0dp"
+                app:chipCornerRadius="20dp"
+                app:chipIconVisible="false"
+                app:checkedIconVisible="false"
+                android:textSize="13sp"
+                android:textColor="@color/text_primary"
+                android:checked="true" />
+
+            <com.google.android.material.chip.Chip
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="推荐"
+                style="@style/Widget.Material3.Chip.Filter"
+                app:chipBackgroundColor="@color/brand_primary_light"
+                app:chipStrokeWidth="0dp"
+                app:chipCornerRadius="20dp"
+                app:chipIconVisible="false"
+                app:checkedIconVisible="false"
+                android:textSize="13sp"
+                android:textColor="@color/text_primary" />
+
+            <com.google.android.material.chip.Chip
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="代码"
+                style="@style/Widget.Material3.Chip.Filter"
+                app:chipBackgroundColor="@color/brand_primary_light"
+                app:chipStrokeWidth="0dp"
+                app:chipCornerRadius="20dp"
+                app:chipIconVisible="false"
+                app:checkedIconVisible="false"
+                android:textSize="13sp"
+                android:textColor="@color/text_primary" />
+
+            <com.google.android.material.chip.Chip
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="轻量"
+                style="@style/Widget.Material3.Chip.Filter"
+                app:chipBackgroundColor="@color/brand_primary_light"
+                app:chipStrokeWidth="0dp"
+                app:chipCornerRadius="20dp"
+                app:chipIconVisible="false"
+                app:checkedIconVisible="false"
+                android:textSize="13sp"
+                android:textColor="@color/text_primary" />
+
+        </com.google.android.material.chip.ChipGroup>
+    </HorizontalScrollView>
+
+    <!-- ================================================================ -->
+    <!-- 可滚动内容区（支持下拉刷新）                                     -->
+    <!-- ================================================================ -->
     <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
         android:id="@+id/swipeRefresh"
         android:layout_width="match_parent"
@@ -83,23 +231,29 @@
         <ScrollView
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:padding="12dp">
+            android:paddingHorizontal="12dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="12dp"
+            android:scrollbars="none"
+            android:clipToPadding="false">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
 
-                <!-- ============ 状态摘要卡片（现代统计卡片设计） ============ -->
+                <!-- ==================================================== -->
+                <!-- 状态摘要卡片（渐变背景 + 现代统计卡片设计）           -->
+                <!-- ==================================================== -->
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
                     app:cardCornerRadius="16dp"
                     app:cardElevation="2dp"
-                    app:cardBackgroundColor="@color/surface_white"
-                    app:strokeWidth="1dp"
-                    app:strokeColor="@color/card_stroke">
+                    app:cardBackgroundColor="@android:color/transparent"
+                    app:strokeWidth="0dp"
+                    android:background="@drawable/bg_gradient_status_card">
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -139,7 +293,7 @@
                             android:textSize="13sp"
                             android:textColor="@color/text_secondary" />
 
-                        <!-- 统计指标行 -->
+                        <!-- 统计指标行（三列） -->
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
@@ -155,7 +309,7 @@
                                 android:layout_marginEnd="4dp"
                                 app:cardCornerRadius="12dp"
                                 app:cardElevation="0dp"
-                                app:cardBackgroundColor="#FFECFDF5"
+                                app:cardBackgroundColor="@color/success_green_light"
                                 app:strokeWidth="0dp"
                                 android:paddingVertical="12dp"
                                 android:paddingHorizontal="8dp">
@@ -199,7 +353,7 @@
                                 android:layout_marginHorizontal="4dp"
                                 app:cardCornerRadius="12dp"
                                 app:cardElevation="0dp"
-                                app:cardBackgroundColor="#FFE3F2FD"
+                                app:cardBackgroundColor="@color/brand_primary_light"
                                 app:strokeWidth="0dp"
                                 android:paddingVertical="12dp"
                                 android:paddingHorizontal="8dp">
@@ -226,7 +380,8 @@
                                         android:textStyle="bold"
                                         android:textColor="@color/brand_primary"
                                         android:singleLine="true"
-                                        android:ellipsize="end" />
+                                        android:ellipsize="end"
+                                        android:maxWidth="80dp" />
 
                                     <TextView
                                         android:layout_width="wrap_content"
@@ -245,7 +400,7 @@
                                 android:layout_marginStart="4dp"
                                 app:cardCornerRadius="12dp"
                                 app:cardElevation="0dp"
-                                app:cardBackgroundColor="#FFFFF3E0"
+                                app:cardBackgroundColor="@color/warning_orange_light"
                                 app:strokeWidth="0dp"
                                 android:paddingVertical="12dp"
                                 android:paddingHorizontal="8dp">
@@ -284,7 +439,9 @@
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
-                <!-- ============ 导入模型卡片（更美观设计） ============ -->
+                <!-- ==================================================== -->
+                <!-- 导入模型卡片（Material Design 3 风格）               -->
+                <!-- ==================================================== -->
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -296,7 +453,7 @@
                     app:strokeColor="@color/card_stroke"
                     android:clickable="true"
                     android:focusable="true"
-                    android:background="?android:attr/selectableItemBackground">
+                    android:foreground="?attr/selectableItemBackground">
 
                     <LinearLayout
                         android:id="@+id/layoutImportModel"
@@ -312,7 +469,7 @@
                             android:layout_height="48dp"
                             app:cardCornerRadius="14dp"
                             app:cardElevation="0dp"
-                            app:cardBackgroundColor="#FFDDE3FF"
+                            app:cardBackgroundColor="@color/brand_primary_light"
                             app:strokeWidth="0dp">
 
                             <LinearLayout
@@ -362,7 +519,11 @@
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
-                <!-- ============ 标题：可下载的模型 ============ -->
+                
+
+                <!-- ==================================================== -->
+                <!-- 标题：可下载的模型                                     -->
+                <!-- ==================================================== -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -387,14 +548,18 @@
                         android:textColor="@color/text_primary" />
                 </LinearLayout>
 
-                <!-- ============ 模型列表容器 ============ -->
+                <!-- ==================================================== -->
+                <!-- 模型列表容器（由代码动态填充）                       -->
+                <!-- ==================================================== -->
                 <LinearLayout
                     android:id="@+id/layoutModelList"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical" />
 
-                <!-- ============ 底部提示 ============ -->
+                <!-- ==================================================== -->
+                <!-- 底部提示卡片（Material Design 3 风格）               -->
+                <!-- ==================================================== -->
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -402,18 +567,32 @@
                     android:layout_marginBottom="8dp"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="0dp"
-                    app:cardBackgroundColor="#FFF0F2F8"
+                    app:cardBackgroundColor="@color/bg_input"
                     app:strokeWidth="0dp"
                     android:paddingHorizontal="16dp"
                     android:paddingVertical="12dp">
 
-                    <TextView
+                    <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="提示：点击模型可直接下载，下载完成后可加载使用。\n本地导入的模型也在此列表中管理。"
-                        android:textSize="12sp"
-                        android:textColor="@color/text_secondary"
-                        android:gravity="center" />
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <ImageView
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:src="@drawable/ic_action_info"
+                            android:tint="@color/text_tertiary" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:text="提示：点击模型可直接下载，下载完成后可加载使用。\n本地导入的模型也在此列表中管理。"
+                            android:textSize="12sp"
+                            android:textColor="@color/text_secondary"
+                            android:lineSpacingExtra="3dp" />
+                    </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
             </LinearLayout>
