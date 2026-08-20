@@ -2,6 +2,7 @@ package com.mobileclaw.app
 
 import android.app.Application
 import android.content.Context
+import android.os.Environment
 import android.util.Log
 import com.mobileclaw.app.adapter.ScreenControllerAdapter
 import com.mobileclaw.app.adapter.ShellExecutorAdapter
@@ -19,6 +20,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import java.io.File
+import java.io.FileWriter
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * MobileClaw 应用入口。
@@ -56,6 +62,37 @@ class MobileClawApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+
+        // 设置全局异常捕获，将崩溃日志写入文件（内部存储 + 外部存储）
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            try {
+                // 写入内部存储（需 root 或 adb 访问）
+                val crashDir = File(filesDir, "crash_logs")
+                crashDir.mkdirs()
+                val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+                val crashFile = File(crashDir, "crash_$timestamp.txt")
+                val report = buildCrashReport(thread, throwable)
+                FileWriter(crashFile).use { writer -> writer.write(report) }
+                Log.e(TAG, "Crash logged to: ${crashFile.absolutePath}")
+
+                // 同时写入外部存储（USB 连接电脑可访问，无需 root）
+                getExternalFilesDir("crash_logs")?.let { extDir ->
+                    extDir.mkdirs()
+                    val extCrashFile = File(extDir, "crash_$timestamp.txt")
+                    FileWriter(extCrashFile).use { writer -> writer.write(report) }
+                    Log.e(TAG, "Crash also logged to: ${extCrashFile.absolutePath}")
+                }
+
+                // 也打 logcat 日志（adb logcat -s MobileClawApp *:E 可看到）
+                Log.e(TAG, "=== CRASH: ${throwable.javaClass.name}: ${throwable.message}")
+                throwable.stackTrace.forEach { Log.e(TAG, "  at $it") }
+            } catch (_: Exception) {
+                // 如果写文件也失败，不能让崩溃处理本身再崩溃
+            }
+            defaultHandler?.uncaughtException(thread, throwable)
+        }
+
         Log.i(TAG, "MobileClaw 启动中...")
 
         // 初始化 Shizuku 状态监听
@@ -269,6 +306,33 @@ class MobileClawApp : Application() {
         Log.i(TAG, "无障碍服务已连接，初始化控制器")
         // 无障碍服务是必需条件，只要它就绪就可以初始化控制器
         initClawController()
+    }
+
+    /**
+     * 构建崩溃报告文本。
+     */
+    private fun buildCrashReport(thread: Thread, throwable: Throwable): String {
+        val sb = StringBuilder()
+        sb.appendLine("=== MobileClaw Crash Report ===")
+        sb.appendLine("Time: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())}")
+        sb.appendLine("Thread: ${thread.name} (${thread.id})")
+        sb.appendLine()
+        sb.appendLine("Exception: ${throwable.javaClass.name}: ${throwable.message}")
+        sb.appendLine()
+        sb.appendLine("Stack Trace:")
+        throwable.stackTrace.forEach { sb.appendLine("\tat $it") }
+        var cause = throwable.cause
+        var level = 0
+        while (cause != null && level < 10) {
+            level++
+            sb.appendLine()
+            sb.appendLine("Caused by ($level): ${cause.javaClass.name}: ${cause.message}")
+            cause.stackTrace.forEach { sb.appendLine("\tat $it") }
+            cause = cause.cause
+        }
+        sb.appendLine()
+        sb.appendLine("=== End of Report ===")
+        return sb.toString()
     }
 }
 

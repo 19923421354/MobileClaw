@@ -2,7 +2,9 @@ package com.mobileclaw.app
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.Environment
 import android.provider.Settings
+import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
@@ -66,44 +68,66 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        AppCompatDelegate.setDefaultNightMode(getCurrentThemeMode())
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
+        try {
+            Log.d("MainActivity", "onCreate: step 1 - setTheme")
+            AppCompatDelegate.setDefaultNightMode(getCurrentThemeMode())
 
-        // 加载保存的配置
-        MobileClawApp.instance.loadSavedConfig()
+            Log.d("MainActivity", "onCreate: step 2 - inflate layout")
+            binding = ActivityMainBinding.inflate(layoutInflater)
+            setContentView(binding.root)
 
-        // 主动初始化控制器（如果无障碍服务已连接）
-        // 解决：无障碍服务已连接但未触发 onServiceConnected 回调时控制器为 null 的问题
-        if (MobileClawApp.clawController == null) {
-            MobileClawApp.instance.initClawController()
-        }
+            // 加载保存的配置
+            Log.d("MainActivity", "onCreate: step 3 - loadConfig")
+            MobileClawApp.instance.loadSavedConfig()
 
-        setupRecyclerView()
-        setupClickListeners()
-        setupModeSwitches()
-
-        // 初始化语音输入助手
-        voiceInputHelper = VoiceInputHelper(this)
-
-        // 启动前台服务
-        ClawAgentService.start(this)
-
-        // 申请基本运行时权限
-        PermissionManager.requestBasicPermissions(this)
-
-        // 监听 Shizuku 状态变化，实时更新 UI
-        shizukuStateJob = lifecycleScope.launch {
-            ShizukuManager.state.collect { state ->
-                // 状态变化时刷新 UI
-                updateServiceStatus()
+            // 主动初始化控制器（如果无障碍服务已连接）
+            // 解决：无障碍服务已连接但未触发 onServiceConnected 回调时控制器为 null 的问题
+            if (MobileClawApp.clawController == null) {
+                MobileClawApp.instance.initClawController()
             }
-        }
 
-        // 启动后自动检查更新（延迟2秒，让界面先加载完成）
-        lifecycleScope.launch {
-            delay(2000)
-            checkForUpdatesAuto()
+            Log.d("MainActivity", "onCreate: step 4 - setupViews")
+            setupRecyclerView()
+            setupClickListeners()
+            setupModeSwitches()
+
+            // 初始化语音输入助手
+            Log.d("MainActivity", "onCreate: step 5 - voiceInput")
+            voiceInputHelper = VoiceInputHelper(this)
+
+            // 启动前台服务
+            Log.d("MainActivity", "onCreate: step 6 - startService")
+            ClawAgentService.start(this)
+
+            // 申请基本运行时权限
+            Log.d("MainActivity", "onCreate: step 7 - permissions")
+            PermissionManager.requestBasicPermissions(this)
+
+            // 监听 Shizuku 状态变化，实时更新 UI
+            Log.d("MainActivity", "onCreate: step 8 - observeShizuku")
+            shizukuStateJob = lifecycleScope.launch {
+                ShizukuManager.state.collect { state ->
+                    updateServiceStatus()
+                }
+            }
+
+            // 启动后自动检查更新（延迟2秒，让界面先加载完成）
+            lifecycleScope.launch {
+                delay(2000)
+                checkForUpdatesAuto()
+            }
+
+            Log.d("MainActivity", "onCreate: complete")
+        } catch (e: Throwable) {
+            Log.e("MainActivity", "onCreate: CRASH at step: ${e.message}", e)
+            android.util.Log.e("MainActivity", "onCreate failed", e)
+            // 如果 onCreate 崩溃，尝试显示错误 Toast
+            try {
+                android.widget.Toast.makeText(this,
+                    "启动失败: ${e.javaClass.simpleName}: ${e.message}",
+                    android.widget.Toast.LENGTH_LONG).show()
+            } catch (_: Throwable) {}
+            throw e // 重新抛出，让系统处理
         }
     }
 
@@ -247,7 +271,7 @@ class MainActivity : AppCompatActivity() {
      */
     private fun createSuggestionChip(label: String, command: String): android.view.View {
         val cardView = com.google.android.material.card.MaterialCardView(this).apply {
-            layoutParams = ViewGroup.LayoutParams(
+            layoutParams = ViewGroup.MarginLayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
@@ -2200,7 +2224,10 @@ class MainActivity : AppCompatActivity() {
             .show()
 
         lifecycleScope.launch(Dispatchers.IO) {
-            val apkFile = File(cacheDir, info.apkName)
+            // 使用持久化目录（getExternalFilesDir），避免 APK 被系统清理
+            val downloadDir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+                ?: filesDir // 如果外部存储不可用，回退到内部 filesDir
+            val apkFile = File(downloadDir, info.apkName)
             // 如果已下载过且文件存在，直接安装
             if (apkFile.exists() && apkFile.length() > 1_000_000) {
                 runOnUiThread { downloadDialog.dismiss() }
@@ -2245,7 +2272,9 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread { downloadDialog.dismiss() }
 
             if (result.success) {
-                UpdateNotificationHelper.showDownloadComplete(this@MainActivity, info.apkName)
+                UpdateNotificationHelper.showDownloadComplete(
+                    this@MainActivity, info.apkName, apkFile.absolutePath
+                )
                 runOnUiThread {
                     showToast("下载完成（${UpdateChecker.formatFileSize(apkFile.length())}），正在启动安装…")
                     UpdateChecker.installApk(this@MainActivity, apkFile)

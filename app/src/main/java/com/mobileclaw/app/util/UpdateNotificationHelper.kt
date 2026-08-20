@@ -2,10 +2,14 @@ package com.mobileclaw.app.util
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import com.mobileclaw.app.receiver.InstallReceiver
+import java.io.File
 
 object UpdateNotificationHelper {
     private const val CHANNEL_ID = "update_download_v2"
@@ -111,7 +115,12 @@ object UpdateNotificationHelper {
         else -> "${"%.1f".format(speedBps.toDouble() / (1024 * 1024))} MB/s"
     }
 
-    fun showDownloadComplete(context: Context, fileName: String) {
+    /**
+     * 显示下载完成通知（带点击安装功能）。
+     *
+     * @param apkFilePath APK 文件绝对路径，用于通知栏点击安装
+     */
+    fun showDownloadComplete(context: Context, fileName: String, apkFilePath: String? = null) {
         createChannel(context)
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
@@ -122,6 +131,21 @@ object UpdateNotificationHelper {
             .setOngoing(false)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+
+        // 点击通知安装 APK
+        if (apkFilePath != null && File(apkFilePath).exists()) {
+            val installIntent = Intent(context, InstallReceiver::class.java).apply {
+                action = InstallReceiver.ACTION_INSTALL_APK
+                putExtra(InstallReceiver.EXTRA_APK_PATH, apkFilePath)
+            }
+            val pendingIntent = PendingIntent.getBroadcast(
+                context,
+                0,
+                installIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            builder.setContentIntent(pendingIntent)
+        }
 
         NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, builder.build())
     }

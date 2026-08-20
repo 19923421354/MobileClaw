@@ -157,6 +157,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.MobileClaw"
+        android:extractNativeLibs="true"
         tools:targetApi="34">
 
         <!-- Shizuku Provider -->
@@ -190,6 +191,15 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- 通知栏点击安装广播接收器 -->
+        <receiver
+            android:name=".receiver.InstallReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.mobileclaw.app.action.INSTALL_APK" />
+            </intent-filter>
+        </receiver>
 
         <!-- Accessibility Service for screen control -->
         <service
