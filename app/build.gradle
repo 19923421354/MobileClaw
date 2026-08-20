@@ -21,8 +21,8 @@ android {
         applicationId "com.mobileclaw.app"
         minSdk 29
         targetSdk 34
-        versionCode 43
-        versionName "2.7.0"
+        versionCode 44
+        versionName "2.7.1"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
