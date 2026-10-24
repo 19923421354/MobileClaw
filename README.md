@@ -1,5 +1,13 @@
 # MobileClaw (灵爪) — AI 手机操控助手
 
+## 🆕 v5.0.0 · 综合大版本
+
+- 版本号统一升至 **5.0.0**（versionCode 500）
+- 应用内「检查更新」链路强化，支持下载后直接安装
+- 新增 **GitHub Actions 自动构建**：打 tag 即自动产出 APK 并附到 Release
+- 与幻语AI、命运织机同步至 v5.0.0 版本体系
+
+
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Android](https://img.shields.io/badge/Android-11%2B-brightgreen)](https://developer.android.com/about/versions/11)
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9-purple)](https://kotlinlang.org)
