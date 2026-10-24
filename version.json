@@ -1,6 +1,6 @@
 {
-  "version": "2.7.1",
-  "versionCode": 44,
-  "releaseUrl": "https://github.com/19923421354/MobileClaw/releases/tag/v2.7.1",
-  "changelog": "✅ v2.7.1 更新检查链路验证版\n\n本次为更新链路验证发布：\n1. 版本号升至 2.7.1（versionCode 44）\n2. 用于验证应用内「检查更新」功能确实可用\n3. 请查看是否能检测到本版本并完成应用内下载安装\n\n若您能看到此更新，说明「检查更新」链路已完全打通。\n\n---\n开源协议: Apache 2.0 | 完全开源 | 仓库: https://github.com/19923421354/MobileClaw"
+  "version": "5.0.0",
+  "versionCode": 500,
+  "releaseUrl": "https://github.com/19923421354/MobileClaw/releases/tag/v5.0.0",
+  "changelog": "✅ v5.0.0 综合大版本\n\n1. 版本号统一升至 5.0.0（versionCode 500）\n2. 更新检查链路沿用并强化，支持应用内下载安装\n3. 新增 GitHub Actions 自动构建工作流（打 tag 即出 APK）\n4. 与幻语AI / 命运织机 同步至 v5.0.0 版本体系\n\n---\n开源协议: Apache 2.0 | 仓库: https://github.com/19923421354/MobileClaw"
 }
